@@ -12,7 +12,7 @@
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square"></a>
   <a href="https://www.affectui.com/docs"><img alt="shadcn registry" src="https://img.shields.io/badge/shadcn-registry-111111?style=flat-square"></a>
   <img alt="React 19" src="https://img.shields.io/badge/React-19-111111?style=flat-square">
-  <img alt="39 free items" src="https://img.shields.io/badge/free%20items-39-2f6bff?style=flat-square">
+  <img alt="40 free items" src="https://img.shields.io/badge/free%20items-40-2f6bff?style=flat-square">
   <a href="https://github.com/flohoeller/affectui/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/flohoeller/affectui?style=flat-square&color=111111"></a>
 </p>
 
@@ -205,6 +205,7 @@ Other clients: add `{ "mcpServers": { "affectui": { "url": "https://www.affectui
 | [Decision Inbox](https://www.affectui.com/components/decision-inbox) | Open decisions with two quick answers each – answered ones confirm and fold away | `npx shadcn@latest add https://www.affectui.com/r/decision-inbox.json` |
 | [Email Draft](https://www.affectui.com/components/email-draft) | Agent-written email for review – switch recipient and tone, edit inline, remove the attachment, send or discard with undo | `npx shadcn@latest add https://www.affectui.com/r/email-draft.json` |
 | [Filter Menu](https://www.affectui.com/components/filter-menu) | Grouped filters with removable chips, collapsible checkbox groups, Clear all and full keyboard control | `npx shadcn@latest add https://www.affectui.com/r/filter-menu.json` |
+| [Message Actions](https://www.affectui.com/components/message-actions) | The quiet bar under an AI message – copy turns into a check, regenerate spins and unfolds a version switcher, thumbs pop and ask why, read aloud becomes a tiny equalizer | `npx shadcn@latest add https://www.affectui.com/r/message-actions.json` |
 | [Notification Stack](https://www.affectui.com/components/notification-stack) | Notice cards stacked behind each other – dismiss the front one to reveal the next | `npx shadcn@latest add https://www.affectui.com/r/notification-stack.json` |
 | [OTP Input](https://www.affectui.com/components/otp-input) | The verification code field done right – a gliding focus ring, paste and SMS autofill, a calm shake on errors and a morph into Verified | `npx shadcn@latest add https://www.affectui.com/r/otp-input.json` |
 | [Profile Menu](https://www.affectui.com/components/profile-menu) | Account card with the signed-in user, menu actions and profile setup progress | `npx shadcn@latest add https://www.affectui.com/r/profile-menu.json` |
@@ -255,7 +256,7 @@ Other clients: add `{ "mcpServers": { "affectui": { "url": "https://www.affectui
 
 ## affectUI Pro
 
-58 more components, screens, blocks and illustrations, including the Command Menu, the Chat Composer, the KPI Chart, the Pricing Plans block and full app screens, are part of [affectUI Pro](https://www.affectui.com/pricing): a one-time purchase with lifetime updates. Their source is not in this repository.
+63 more components, screens, blocks and illustrations, including the Command Menu, the Chat Composer, the KPI Chart, the Pricing Plans block and full app screens, are part of [affectUI Pro](https://www.affectui.com/pricing): a one-time purchase with lifetime updates. Their source is not in this repository.
 
 ## Contributing
 

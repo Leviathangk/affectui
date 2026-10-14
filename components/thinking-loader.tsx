@@ -159,7 +159,7 @@ const css = /* css */ `
   --ui-tl-ray: #171717;
   --ui-tl-bg: #ffffff;
   --ui-tl-line: #e7e7e7;
-  --ui-tl-shine: rgba(23, 23, 23, 0.95);
+  --ui-tl-shine: rgba(255, 255, 255, 0.82);
   --ui-tl-done: #171717;
   --ui-tl-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ui-tl-h: 34px;
