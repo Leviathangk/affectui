@@ -12,7 +12,7 @@
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square"></a>
   <a href="https://www.affectui.com/docs"><img alt="shadcn registry" src="https://img.shields.io/badge/shadcn-registry-111111?style=flat-square"></a>
   <img alt="React 19" src="https://img.shields.io/badge/React-19-111111?style=flat-square">
-  <img alt="40 free items" src="https://img.shields.io/badge/free%20items-40-2f6bff?style=flat-square">
+  <img alt="57 free items" src="https://img.shields.io/badge/free%20items-57-2f6bff?style=flat-square">
   <a href="https://github.com/flohoeller/affectui/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/flohoeller/affectui?style=flat-square&color=111111"></a>
 </p>
 
@@ -199,23 +199,39 @@ Other clients: add `{ "mcpServers": { "affectui": { "url": "https://www.affectui
 | Name | What it is | Install |
 | --- | --- | --- |
 | [Button](https://www.affectui.com/components/button) | Primary, secondary, ghost and destructive buttons with icons, sizes and a shimmering loading state | `npx shadcn@latest add https://www.affectui.com/r/button.json` |
+| [Button (Clean)](https://www.affectui.com/components/button-clean) | Primary, secondary, ghost and destructive buttons with icons, sizes and a shimmering loading state | `npx shadcn@latest add https://www.affectui.com/r/button-clean.json` |
 | [Change Summary](https://www.affectui.com/components/change-summary) | What moved since last time – one metric per row with a colored trend | `npx shadcn@latest add https://www.affectui.com/r/change-summary.json` |
+| [Change Summary (Clean)](https://www.affectui.com/components/change-summary-clean) | What moved since last time – one metric per row with a colored trend | `npx shadcn@latest add https://www.affectui.com/r/change-summary-clean.json` |
 | [Comment Thread](https://www.affectui.com/components/comment-thread) | One comment with replies – an assistant reports what it did, folds open details and answers @mentions | `npx shadcn@latest add https://www.affectui.com/r/comment-thread.json` |
-| [Cover Flow](https://www.affectui.com/components/cover-flow) | Browse covers in 3D – drag, flick or scrub the row, it springs to the nearest cover; images drift in their frames over a soft reflection | `npx shadcn@latest add https://www.affectui.com/r/cover-flow.json` |
+| [Comment Thread (Clean)](https://www.affectui.com/components/comment-thread-clean) | One comment with replies – an assistant reports what it did, folds open details and answers @mentions | `npx shadcn@latest add https://www.affectui.com/r/comment-thread-clean.json` |
 | [Decision Inbox](https://www.affectui.com/components/decision-inbox) | Open decisions with two quick answers each – answered ones confirm and fold away | `npx shadcn@latest add https://www.affectui.com/r/decision-inbox.json` |
+| [Decision Inbox (Clean)](https://www.affectui.com/components/decision-inbox-clean) | Open decisions with two quick answers each – answered ones confirm and fold away | `npx shadcn@latest add https://www.affectui.com/r/decision-inbox-clean.json` |
 | [Email Draft](https://www.affectui.com/components/email-draft) | Agent-written email for review – switch recipient and tone, edit inline, remove the attachment, send or discard with undo | `npx shadcn@latest add https://www.affectui.com/r/email-draft.json` |
+| [Email Draft (Clean)](https://www.affectui.com/components/email-draft-clean) | Agent-written email for review – switch recipient and tone, edit inline, remove the attachment, send or discard with undo | `npx shadcn@latest add https://www.affectui.com/r/email-draft-clean.json` |
 | [Filter Menu](https://www.affectui.com/components/filter-menu) | Grouped filters with removable chips, collapsible checkbox groups, Clear all and full keyboard control | `npx shadcn@latest add https://www.affectui.com/r/filter-menu.json` |
+| [Filter Menu (Clean)](https://www.affectui.com/components/filter-menu-clean) | Grouped filters with removable chips, collapsible checkbox groups, Clear all and full keyboard control | `npx shadcn@latest add https://www.affectui.com/r/filter-menu-clean.json` |
 | [Message Actions](https://www.affectui.com/components/message-actions) | The quiet bar under an AI message – copy turns into a check, regenerate spins and unfolds a version switcher, thumbs pop and ask why, read aloud becomes a tiny equalizer | `npx shadcn@latest add https://www.affectui.com/r/message-actions.json` |
+| [Message Actions (Clean)](https://www.affectui.com/components/message-actions-clean) | The quiet bar under an AI message – copy turns into a check, regenerate spins and unfolds a version switcher, thumbs pop and ask why, read aloud becomes a tiny equalizer | `npx shadcn@latest add https://www.affectui.com/r/message-actions-clean.json` |
 | [Notification Stack](https://www.affectui.com/components/notification-stack) | Notice cards stacked behind each other – dismiss the front one to reveal the next | `npx shadcn@latest add https://www.affectui.com/r/notification-stack.json` |
+| [Notification Stack (Clean)](https://www.affectui.com/components/notification-stack-clean) | Notice cards stacked behind each other – dismiss the front one to reveal the next | `npx shadcn@latest add https://www.affectui.com/r/notification-stack-clean.json` |
 | [OTP Input](https://www.affectui.com/components/otp-input) | The verification code field done right – a gliding focus ring, paste and SMS autofill, a calm shake on errors and a morph into Verified | `npx shadcn@latest add https://www.affectui.com/r/otp-input.json` |
+| [OTP Input (Clean)](https://www.affectui.com/components/otp-input-clean) | The verification code field done right – a gliding focus ring, paste and SMS autofill, a calm shake on errors and a morph into Verified | `npx shadcn@latest add https://www.affectui.com/r/otp-input-clean.json` |
 | [Profile Menu](https://www.affectui.com/components/profile-menu) | Account card with the signed-in user, menu actions and profile setup progress | `npx shadcn@latest add https://www.affectui.com/r/profile-menu.json` |
+| [Profile Menu (Clean)](https://www.affectui.com/components/profile-menu-clean) | Account card with the signed-in user, menu actions and profile setup progress | `npx shadcn@latest add https://www.affectui.com/r/profile-menu-clean.json` |
 | [Progress Tracker](https://www.affectui.com/components/progress-tracker) | Onboarding checklist with an animated progress bar, ticks that draw themselves and auto play | `npx shadcn@latest add https://www.affectui.com/r/progress-tracker.json` |
+| [Progress Tracker (Clean)](https://www.affectui.com/components/progress-tracker-clean) | Onboarding checklist with an animated progress bar, ticks that draw themselves and auto play | `npx shadcn@latest add https://www.affectui.com/r/progress-tracker-clean.json` |
 | [Reaction Bar](https://www.affectui.com/components/reaction-bar) | Like, comment, repost and share in one pill – icons pop and fill, counts roll in digit by digit | `npx shadcn@latest add https://www.affectui.com/r/reaction-bar.json` |
+| [Reaction Bar (Clean)](https://www.affectui.com/components/reaction-bar-clean) | Like, comment, repost and share in one pill – icons pop and fill, counts roll in digit by digit | `npx shadcn@latest add https://www.affectui.com/r/reaction-bar-clean.json` |
 | [Segmented Control](https://www.affectui.com/components/segmented-control) | Switch between two to six options – a raised pill or underline that glides, stretches a little and can be dragged across, with icons, counts and badges | `npx shadcn@latest add https://www.affectui.com/r/segmented-control.json` |
+| [Segmented Control (Clean)](https://www.affectui.com/components/segmented-control-clean) | Switch between two to six options – a raised pill or underline that glides, stretches a little and can be dragged across, with icons, counts and badges | `npx shadcn@latest add https://www.affectui.com/r/segmented-control-clean.json` |
 | [Smart Recommendation](https://www.affectui.com/components/smart-recommendation) | Suggestion card with a confidence signal, alternatives to switch to and accept with undo | `npx shadcn@latest add https://www.affectui.com/r/smart-recommendation.json` |
+| [Smart Recommendation (Clean)](https://www.affectui.com/components/smart-recommendation-clean) | Suggestion card with a confidence signal, alternatives to switch to and accept with undo | `npx shadcn@latest add https://www.affectui.com/r/smart-recommendation-clean.json` |
 | [Thinking Loader](https://www.affectui.com/components/thinking-loader) | A small working pill for AI replies – an eight-ray spinner and a shimmering label that rolls through phases and settles on a check | `npx shadcn@latest add https://www.affectui.com/r/thinking-loader.json` |
+| [Thinking Loader (Clean)](https://www.affectui.com/components/thinking-loader-clean) | A small working pill for AI replies – an eight-ray spinner and a shimmering label that rolls through phases and settles on a check | `npx shadcn@latest add https://www.affectui.com/r/thinking-loader-clean.json` |
 | [Tips Panel](https://www.affectui.com/components/tips-panel) | Grid of short tips with one action each – taken tips turn into a done state | `npx shadcn@latest add https://www.affectui.com/r/tips-panel.json` |
+| [Tips Panel (Clean)](https://www.affectui.com/components/tips-panel-clean) | Grid of short tips with one action each – taken tips turn into a done state | `npx shadcn@latest add https://www.affectui.com/r/tips-panel-clean.json` |
 | [Tool Call Card](https://www.affectui.com/components/tool-call-card) | An agent's tool call in one line – live timer, status and summary, folds open to highlighted arguments and result with copy, retry on errors and a group that sums them up | `npx shadcn@latest add https://www.affectui.com/r/tool-call-card.json` |
+| [Tool Call Card (Clean)](https://www.affectui.com/components/tool-call-card-clean) | An agent's tool call in one line – live timer, status and summary, folds open to highlighted arguments and result with copy, retry on errors and a group that sums them up | `npx shadcn@latest add https://www.affectui.com/r/tool-call-card-clean.json` |
 
 ## Blocks
 
@@ -229,6 +245,7 @@ Other clients: add `{ "mcpServers": { "affectui": { "url": "https://www.affectui
 | Name | What it is | Install |
 | --- | --- | --- |
 | [Agent Team](https://www.affectui.com/illustrations/agent-team) | A prompt types itself and branches out into three agents, each with a role and overlapping tool logos | `npx shadcn@latest add https://www.affectui.com/r/agent-team.json` |
+| [Cover Flow](https://www.affectui.com/illustrations/cover-flow) | Browse covers in 3D – drag, flick or scrub the row, it springs to the nearest cover; images drift in their frames over a soft reflection | `npx shadcn@latest add https://www.affectui.com/r/cover-flow.json` |
 | [DACH Region](https://www.affectui.com/illustrations/region-dach) | DACH map with fading neighbours and a pastel band along the border, switchable to the US, China, India, Brazil or Japan | `npx shadcn@latest add https://www.affectui.com/r/region-dach.json` |
 | [Empty Calendar](https://www.affectui.com/illustrations/empty-calendar) | Stack of calendar cards marked empty, fanning out on hover | `npx shadcn@latest add https://www.affectui.com/r/empty-calendar.json` |
 | [Enrichment Orbit](https://www.affectui.com/illustrations/enrichment-orbit) | Grok tile inside two rings with comets and data nodes orbiting around it | `npx shadcn@latest add https://www.affectui.com/r/enrichment-orbit.json` |
@@ -256,7 +273,7 @@ Other clients: add `{ "mcpServers": { "affectui": { "url": "https://www.affectui
 
 ## affectUI Pro
 
-63 more components, screens, blocks and illustrations, including the Command Menu, the Chat Composer, the KPI Chart, the Pricing Plans block and full app screens, are part of [affectUI Pro](https://www.affectui.com/pricing): a one-time purchase with lifetime updates. Their source is not in this repository.
+93 more components, screens, blocks and illustrations, including the Command Menu, the Chat Composer, the KPI Chart, the Pricing Plans block and full app screens, are part of [affectUI Pro](https://www.affectui.com/pricing): a one-time purchase with lifetime updates. Their source is not in this repository.
 
 ## Contributing
 

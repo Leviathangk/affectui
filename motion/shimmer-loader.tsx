@@ -78,7 +78,7 @@ const css = /* css */ `
   --ui-shm-base: #ececec;
   --ui-shm-glow: rgba(255, 255, 255, 0.9);
   --ui-shm-text: #a3a3a3;
-  --ui-shm-text-glow: #171717;
+  --ui-shm-text-glow: #ffffff;
   --ui-shm-dur: 2.2s;
 }
 

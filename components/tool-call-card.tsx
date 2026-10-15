@@ -519,7 +519,7 @@ const css = /* css */ `
   --ui-tc-str: #0f7b6c;
   --ui-tc-num: #b25b0c;
   --ui-tc-lit: #6e56cf;
-  --ui-tc-shine: rgba(23, 23, 23, 0.95);
+  --ui-tc-shine: rgba(255, 255, 255, 0.82);
   --ui-tc-focus: rgba(23, 23, 23, 0.22);
   --ui-tc-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ui-tc-mono: ui-monospace, "SF Mono", Menlo, monospace;

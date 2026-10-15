@@ -175,7 +175,7 @@ const css = /* css */ `
   --ui-btn-muted: #737373;
   --ui-btn-hover: #404040;
   --ui-btn-fill: #f0f0f0;
-  --ui-btn-shine: rgba(23, 23, 23, 0.92);
+  --ui-btn-shine: rgba(255, 255, 255, 0.82);
   --ui-btn-shine-on-ink: rgba(255, 255, 255, 0.95);
   --ui-btn-danger: #ff0000;
   --ui-btn-danger-bg: #ffe6e9;
@@ -288,7 +288,7 @@ const css = /* css */ `
   background: color-mix(in srgb, var(--ui-btn-danger-bg) 88%, var(--ui-btn-danger));
 }
 .ui-button[data-variant="destructive"] .ui-button__label::after {
-  --ui-btn-shine: var(--ui-btn-danger);
+  --ui-btn-shine: rgba(255, 255, 255, 0.82);
 }
 
 .ui-button:active:not(:disabled):not([data-loading]) {
@@ -418,7 +418,7 @@ const css = /* css */ `
   --ui-btn-edge-bottom: #d4d4d8;
   --ui-btn-ring: rgba(0, 0, 0, 0.6);
   --ui-btn-dark-shadow: rgba(0, 0, 0, 0.4);
-  --ui-btn-shine-on-ink: rgba(18, 18, 19, 0.9);
+  --ui-btn-shine-on-ink: rgba(255, 255, 255, 0.9);
 
   --ui-btn-ink: #ededed;
   --ui-btn-surface: #232326;

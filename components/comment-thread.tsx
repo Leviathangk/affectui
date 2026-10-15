@@ -469,7 +469,7 @@ img.ui-ct__avatar { box-shadow: 0 0 0 1px var(--ui-ct-avatar-ring); }
   display: inline-block;
   margin: 8px 0 0;
   font-size: 14px;
-  background: linear-gradient(90deg, var(--ui-ct-subtle) 0%, var(--ui-ct-subtle) 35%, var(--ui-ct-ink) 50%, var(--ui-ct-subtle) 65%, var(--ui-ct-subtle) 100%);
+  background: linear-gradient(90deg, var(--ui-ct-subtle) 0%, var(--ui-ct-subtle) 35%, rgba(255, 255, 255, 0.9) 50%, var(--ui-ct-subtle) 65%, var(--ui-ct-subtle) 100%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
