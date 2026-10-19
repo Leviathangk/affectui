@@ -580,21 +580,22 @@ const css = /* css */ `
   opacity: 0;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: width 300ms var(--ui-otp-ease), border-radius 300ms var(--ui-otp-ease), opacity 160ms ease 140ms;
+  transition: width 300ms var(--ui-otp-ease), height 300ms var(--ui-otp-ease), border-radius 300ms var(--ui-otp-ease), opacity 160ms ease 140ms;
 }
 .ui-otp__pill-inner {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 18px 0 15px;
+  gap: 6px;
+  padding: 0 15px 0 12px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 20px;
   white-space: nowrap;
   color: var(--ui-otp-ink);
   opacity: 0;
   transition: opacity 160ms ease;
 }
-.ui-otp__check { width: 17px; height: 17px; fill: none; stroke: var(--ui-otp-success); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.ui-otp__check { flex: none; width: 17px; height: 17px; fill: none; stroke: var(--ui-otp-success); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .ui-otp__check path { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 120ms ease; }
 .ui-otp[data-status="success"] .ui-otp__box {
   transform: translateX(calc(((var(--n) - 1) / 2 - var(--i)) * (var(--size) + var(--ui-otp-gap)))) scale(0.7);
@@ -602,10 +603,12 @@ const css = /* css */ `
   transition: transform 340ms var(--ui-otp-ease), opacity 220ms ease 120ms;
 }
 .ui-otp[data-status="success"] .ui-otp__sep { opacity: 0; }
+/* The pill settles at a compact height, not the height of the boxes */
 .ui-otp[data-status="success"] .ui-otp__pill {
+  height: 36px;
   border-radius: 999px;
   opacity: 1;
-  transition: width 460ms var(--ui-otp-ease) 220ms, border-radius 460ms var(--ui-otp-ease) 220ms, opacity 160ms ease 120ms;
+  transition: width 460ms var(--ui-otp-ease) 220ms, height 460ms var(--ui-otp-ease) 220ms, border-radius 460ms var(--ui-otp-ease) 220ms, opacity 160ms ease 120ms;
 }
 .ui-otp[data-status="success"] .ui-otp__pill-inner { opacity: 1; transition: opacity 240ms ease 460ms; }
 .ui-otp[data-status="success"] .ui-otp__check path { stroke-dashoffset: 0; transition: stroke-dashoffset 380ms var(--ui-otp-ease) 560ms; }
