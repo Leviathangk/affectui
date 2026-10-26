@@ -33,6 +33,15 @@ export type TipsPanelProps = {
 
 export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close", className }: TipsPanelProps) {
   const [done, setDone] = useState<Set<string>>(new Set());
+  // Tips that share an id still get their own key, so marking one never marks the other
+  const seen = new Map<string, number>();
+  const keyed = tips.map((tip) => {
+    const n = seen.get(tip.id) ?? 0;
+    seen.set(tip.id, n + 1);
+    return { tip, key: n ? `${tip.id}#${n}` : tip.id };
+  });
+  // Only tips that are still in the list count
+  const doneCount = keyed.filter((k) => done.has(k.key)).length;
 
   return (
     <>
@@ -41,20 +50,26 @@ export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close",
       </style>
       <section className={["ui-tp", className].filter(Boolean).join(" ")} aria-label={title}>
         <header className="ui-tp__head">
-          <h3 className="ui-tp__title">{title}</h3>
+          <h3 className="ui-tp__title" dir="auto">
+            {title}
+          </h3>
           <span className="ui-tp__count" aria-live="polite">
-            {done.size}/{tips.length} done
+            {count.format(doneCount)}/{count.format(tips.length)} done
           </span>
         </header>
 
         <div className="ui-tp__card">
           <ul className="ui-tp__grid">
-            {tips.map((tip, i) => {
-              const isDone = done.has(tip.id);
+            {keyed.map(({ tip, key }, i) => {
+              const isDone = done.has(key);
               return (
-                <li key={tip.id} className="ui-tp__tip" data-done={isDone || undefined} style={{ animationDelay: `${80 + i * 50}ms` }}>
-                  <p className="ui-tp__tip-title">{tip.title}</p>
-                  <p className="ui-tp__tip-text">{tip.description}</p>
+                <li key={key} className="ui-tp__tip" data-done={isDone || undefined} style={{ animationDelay: `${80 + Math.min(i, 12) * 50}ms` }}>
+                  <p className="ui-tp__tip-title" dir="auto">
+                    {tip.title}
+                  </p>
+                  <p className="ui-tp__tip-text" dir="auto">
+                    {tip.description}
+                  </p>
                   {isDone ? (
                     <span className="ui-tp__done" role="status">
                       <CheckIcon />
@@ -65,7 +80,7 @@ export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close",
                       type="button"
                       className={["ui-tp__btn", tip.primary && "ui-tp__btn--primary"].filter(Boolean).join(" ")}
                       onClick={() => {
-                        setDone((d) => new Set(d).add(tip.id));
+                        setDone((d) => new Set(d).add(key));
                         tip.onAction?.();
                       }}
                     >
@@ -89,6 +104,8 @@ export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close",
     </>
   );
 }
+
+const count = new Intl.NumberFormat("en");
 
 /** Keyboard key for tip descriptions, e.g. <Kbd>⌘K</Kbd> */
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="ui-tp__kbd">{children}</kbd>;
@@ -137,13 +154,16 @@ const css = /* css */ `
   padding: 13px 20px 12px;
 }
 .ui-tp__title {
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: 16px;
   font-weight: 600;
   line-height: 22px;
   letter-spacing: -0.01em;
 }
 .ui-tp__count {
+  flex: none;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: var(--ui-tp-muted);
@@ -181,14 +201,22 @@ const css = /* css */ `
   transition: background-color 260ms ease, border-color 260ms ease;
 }
 .ui-tp__tip[data-done] { background: #fafafa; }
+/* Tips are shrink-to-fit flex items – max-width keeps long words and URLs inside the tile */
 .ui-tp__tip-title {
+  max-width: 100%;
   margin: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
 }
 .ui-tp__tip-text {
   flex: 1;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  text-align: start;
   margin: 6px 0 14px;
   font-size: 13px;
   line-height: 20px;
@@ -211,9 +239,11 @@ const css = /* css */ `
   vertical-align: 1px;
 }
 
+/* A long label wraps inside the tile instead of leaving it; one line stays 30px */
 .ui-tp__btn {
-  height: 30px;
-  padding: 0 12px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 12px;
   border: 0;
   border-radius: 9px;
   background: #fff;
@@ -222,6 +252,8 @@ const css = /* css */ `
   font-weight: 500;
   line-height: 20px;
   color: var(--ui-tp-ink);
+  text-align: start;
+  overflow-wrap: anywhere;
   transition: background-color 160ms ease, transform 160ms ease;
 }
 .ui-tp__btn:hover { background: #f7f7f7; }
@@ -237,7 +269,9 @@ const css = /* css */ `
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  max-width: 100%;
+  min-height: 30px;
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 500;
   color: var(--ui-tp-ok);

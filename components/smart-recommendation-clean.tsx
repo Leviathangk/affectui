@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /*
  * Smart Recommendation (Clean) – a suggestion card with a confidence signal, alternatives and one-click accept, in a
@@ -31,6 +31,13 @@ export type SmartRecommendationProps = {
 };
 
 const signalText = ["No signal", "Weak signal", "Good signal", "Strong signal"];
+/** Any signal outside 0–3 (NaN, "3", 7, -1) is read as the nearest valid level, NaN as no signal */
+const level = (s: unknown): 0 | 1 | 2 | 3 => {
+  const n = Math.round(Number(s));
+  return (Number.isFinite(n) ? Math.min(3, Math.max(0, n)) : 0) as 0 | 1 | 2 | 3;
+};
+/** "Incremental sync" → "incremental sync", but "AWS backup" and "S3 sync" keep their capitals */
+const lowerFirst = (s: string) => (/^\p{Lu}\p{Ll}/u.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 export function SmartRecommendation({
   title = "Smart recommendation",
@@ -40,11 +47,23 @@ export function SmartRecommendation({
   defaultOpen = true,
   className,
 }: SmartRecommendationProps) {
-  const [chosen, setChosen] = useState(options[0].id);
-  const [accepted, setAccepted] = useState<string | null>(null);
+  // By position, so two options with the same id stay apart
+  const [chosen, setChosen] = useState(0);
+  const [accepted, setAccepted] = useState<number | null>(null);
   const [open, setOpen] = useState(defaultOpen);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // When the button sits at the start of its row (long labels push the actions onto their own row), the menu opens
+  // to the right instead of past the card's left edge
+  const [flip, setFlip] = useState(false);
+  useLayoutEffect(() => {
+    const alt = menuRef.current;
+    const pop = alt?.querySelector<HTMLElement>(".ui-src__menu");
+    const card = alt?.closest<HTMLElement>(".ui-src");
+    if (!menu || !alt || !pop || !card || getComputedStyle(alt).position === "static") return setFlip(false);
+    // Some slack: a menu that only grazes the edge (as in the demo) keeps opening to the left
+    setFlip(alt.getBoundingClientRect().right - pop.offsetWidth < card.getBoundingClientRect().left - 24);
+  }, [menu]);
 
   useEffect(() => {
     if (!menu) return;
@@ -58,9 +77,14 @@ export function SmartRecommendation({
     };
   }, [menu]);
 
-  const current = options.find((o) => o.id === chosen) ?? options[0];
-  const isRecommended = current.id === options[0].id;
-  const done = accepted === current.id;
+  const at = chosen < options.length ? chosen : 0;
+  const current = options[at];
+  // Nothing to recommend – render nothing rather than crash
+  if (!current) return null;
+  const isRecommended = at === 0;
+  const done = accepted === at;
+  const signal = level(current.signal);
+  const acceptText = `Accept ${lowerFirst(String(current.label))}`;
 
   return (
     <>
@@ -70,26 +94,28 @@ export function SmartRecommendation({
       <section className={["ui-src", className].filter(Boolean).join(" ")} aria-label={title} data-accepted={done || undefined}>
         <button type="button" className="ui-src__head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           <SparkMark />
-          <span className="ui-src__title">{title}</span>
+          <span className="ui-src__title" dir="auto" title={title}>
+            {title}
+          </span>
           {!isRecommended && <span className="ui-src__pill">Alternative</span>}
           <span className="ui-src__chevron">
             <Icon d="m4.5 6.25 3.5 3.5 3.5-3.5" />
           </span>
         </button>
         <div className="ui-src__body" data-open={open || undefined} inert={!open}>
-          <p className="ui-src__reason" key={current.id}>
+          <p className="ui-src__reason" key={at} dir="auto">
             {current.reason}
           </p>
         </div>
 
         <footer className="ui-src__foot">
-          <span className="ui-src__signal" data-level={current.signal} title={signalText[current.signal]}>
+          <span className="ui-src__signal" data-level={signal} title={signalText[signal]}>
             <span className="ui-src__bars" aria-hidden="true">
               {[1, 2, 3].map((n) => (
-                <span key={n} data-on={current.signal >= n || undefined} />
+                <span key={n} data-on={signal >= n || undefined} />
               ))}
             </span>
-            {signalText[current.signal]}
+            {signalText[signal]}
           </span>
 
           <div className="ui-src__actions">
@@ -106,27 +132,29 @@ export function SmartRecommendation({
                   Alternatives
                 </button>
                 {menu && (
-                  <div className="ui-src__menu" role="menu">
+                  <div className="ui-src__menu" role="menu" data-flip={flip || undefined}>
                     {options.map((o, i) => (
                       <button
-                        key={o.id}
+                        key={`${o.id}-${i}`}
                         type="button"
                         role="menuitemradio"
-                        aria-checked={o.id === chosen}
+                        aria-checked={i === at}
                         className="ui-src__option"
                         onClick={() => {
-                          setChosen(o.id);
+                          setChosen(i);
                           setMenu(false);
                           setOpen(true);
                         }}
                       >
                         <span className="ui-src__option-label">
-                          <span className="ui-src__option-name">{o.label}</span>
+                          <span className="ui-src__option-name" dir="auto" title={o.label}>
+                            {o.label}
+                          </span>
                           {i === 0 && <span className="ui-src__tag">Recommended</span>}
                         </span>
-                        <span className="ui-src__mini" data-level={o.signal} aria-label={signalText[o.signal]}>
+                        <span className="ui-src__mini" data-level={level(o.signal)} aria-label={signalText[level(o.signal)]}>
                           {[1, 2, 3].map((n) => (
-                            <span key={n} data-on={o.signal >= n || undefined} />
+                            <span key={n} data-on={level(o.signal) >= n || undefined} />
                           ))}
                         </span>
                       </button>
@@ -139,7 +167,9 @@ export function SmartRecommendation({
               <>
                 <span className="ui-src__done" role="status">
                   <Icon d="m3.5 8.5 3 3 6-7" />
-                  <span className="ui-src__done-text">{current.label} accepted</span>
+                  <span className="ui-src__done-text" title={`${current.label} accepted`}>
+                    <bdi>{current.label}</bdi> accepted
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -157,13 +187,14 @@ export function SmartRecommendation({
               <button
                 type="button"
                 className="ui-src__btn ui-src__btn--primary"
+                title={acceptText}
                 onClick={() => {
-                  setAccepted(current.id);
+                  setAccepted(at);
                   setMenu(false);
                   onAccept?.(current);
                 }}
               >
-                Accept {current.label.toLowerCase()}
+                <span className="ui-src__btn-text">{acceptText}</span>
               </button>
             )}
           </div>
@@ -297,6 +328,9 @@ const css = /* css */ `
   font-size: 13px;
   line-height: 20px;
   color: var(--ui-src-text);
+  text-align: start;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
   animation: ui-src-swap 360ms var(--ui-src-ease);
 }
 .ui-src__body[data-open] .ui-src__reason { padding-bottom: 14px; }
@@ -338,7 +372,9 @@ const css = /* css */ `
 .ui-src [data-level="3"] > span[data-on] { background: var(--ui-src-ok); }
 .ui-src [data-level="0"] > span:first-child { background: var(--ui-src-faint); }
 
-.ui-src__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+/* Never wider than the row – a long label shortens in its button instead of running out of the card */
+.ui-src__actions { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; margin-left: auto; }
+.ui-src__alt, .ui-src__btn--icon { flex: none; }
 
 /* Secondary: white with the card's hairline shadow */
 .ui-src__btn {
@@ -352,9 +388,12 @@ const css = /* css */ `
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
+  min-width: 0;
+  max-width: 100%;
   white-space: nowrap;
   transition: background-color 140ms ease, box-shadow 140ms ease, transform 160ms var(--ui-src-ease);
 }
+.ui-src__btn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 :where(.ui-src) .ui-src__btn { background: var(--ui-src-card); box-shadow: var(--ui-src-shadow); color: var(--ui-src-strong); }
 .ui-src__btn--icon { padding: 0 10px 0 8px; }
 .ui-src__btn--icon svg { color: var(--ui-src-icon); }
@@ -392,13 +431,19 @@ const css = /* css */ `
   z-index: 5;
   display: grid;
   gap: 2px;
+  /* The column never grows with a long name; a long list scrolls */
+  grid-template-columns: minmax(0, 1fr);
   width: 248px;
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   border-radius: 10px;
   background: var(--ui-src-card);
   box-shadow: var(--ui-src-shadow-pop);
   animation: ui-src-drop 180ms var(--ui-src-ease);
 }
+.ui-src__menu[data-flip] { right: auto; left: 0; }
 /* Narrow: the actions sit on their own row – the menu lines up with its right edge so it stays inside */
 @container (max-width: 420px) {
   .ui-src__actions { position: relative; }
@@ -423,7 +468,8 @@ const css = /* css */ `
 /* The chosen one: a light blue fill with a hairline */
 .ui-src__option[aria-checked="true"] { background: var(--ui-src-accent-bg); box-shadow: inset 0 0 0 0.5px var(--ui-src-accent-line); }
 .ui-src button.ui-src__option:focus-visible { outline-offset: -2px; }
-.ui-src__option-label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ui-src__option-label { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 6px; min-width: 0; }
+.ui-src__mini { flex: none; }
 .ui-src__option-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ui-src__tag {
   flex: none;

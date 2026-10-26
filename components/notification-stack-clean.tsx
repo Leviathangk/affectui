@@ -35,6 +35,13 @@ const PEEK = 12; // how far each card behind peeks out below the one in front, i
 export function NotificationStack({ notices, onDismiss, className }: NotificationStackProps) {
   const [items, setItems] = useState(notices);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  // New notices from the parent join the stack; dismissed ones stay gone
+  const removed = useRef(new Set<string>());
+  const [given, setGiven] = useState(notices);
+  if (notices !== given) {
+    setGiven(notices);
+    setItems(notices.filter((n) => !removed.current.has(n.id)));
+  }
   const [heights, setHeights] = useState<Record<string, number>>({});
   const refs = useRef(new Map<string, HTMLElement>());
 
@@ -45,7 +52,8 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
   useLayoutEffect(() => {
     const measure = () => {
       const next: Record<string, number> = {};
-      refs.current.forEach((el, id) => (next[id] = el.offsetHeight));
+      // The full height, also for a card behind that is cut to the front card's height
+      refs.current.forEach((el, id) => (next[id] = el.scrollHeight + el.offsetHeight - el.clientHeight));
       setHeights(next);
     };
     measure();
@@ -58,6 +66,7 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
     setLeaving((s) => new Set(s).add(notice.id));
     onDismiss?.(notice);
     window.setTimeout(() => {
+      removed.current.add(notice.id);
       setItems((list) => list.filter((n) => n.id !== notice.id));
       setLeaving((s) => {
         const next = new Set(s);
@@ -83,9 +92,12 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
           const i = visible.findIndex((n) => n.id === notice.id);
           const gone = i === -1;
           const depth = Math.max(0, i);
+          // Only the cards that can show are rendered – a long list stays light
+          if (!gone && depth > 3) return null;
           const isBehind = !gone && depth > 0;
           // Cards behind are lined up on the front card's bottom edge, a little lower and smaller each
-          const y = gone || depth === 0 ? 0 : front - (heights[notice.id] ?? front) + Math.min(depth, 2) * PEEK;
+          // A card behind that is taller than the front one is cut to its height, so it never peeks out above
+          const y = gone || depth === 0 ? 0 : front - Math.min(heights[notice.id] ?? front, front) + Math.min(depth, 2) * PEEK;
           const scale = gone ? 1 : 1 - Math.min(depth, 2) * 0.05;
           return (
             <article
@@ -104,12 +116,19 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                 zIndex: gone ? 10 : 10 - depth,
                 transform: gone ? undefined : `translateY(${y}px) scale(${scale})`,
                 opacity: depth > 2 ? 0 : undefined,
+                maxHeight: isBehind && front ? front : undefined,
               }}
             >
               <Pattern kind={notice.pattern ?? "orbit"} />
               <div className="ui-nsc__body">
                 <div className="ui-nsc__top">
-                  {notice.badge ? <span className="ui-nsc__badge">{notice.badge}</span> : <span />}
+                  {notice.badge ? (
+                    <span className="ui-nsc__badge" dir="auto" title={notice.badge}>
+                      {notice.badge}
+                    </span>
+                  ) : (
+                    <span />
+                  )}
                   <button
                     type="button"
                     className="ui-nsc__close"
@@ -122,14 +141,17 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                     <CloseIcon />
                   </button>
                 </div>
-                <h3 id={`${notice.id}-title`} className="ui-nsc__title">
+                <h3 id={`${notice.id}-title`} className="ui-nsc__title" dir="auto">
                   {notice.title}
                 </h3>
-                <p className="ui-nsc__text">{notice.text}</p>
+                <p className="ui-nsc__text" dir="auto">
+                  {notice.text}
+                </p>
                 {notice.action &&
                   (notice.action.href ? (
                     <a
                       className="ui-nsc__btn"
+                      dir="auto"
                       href={notice.action.href}
                       onClick={notice.action.onClick}
                       {...(notice.action.external ? { target: "_blank", rel: "noreferrer" } : {})}
@@ -138,7 +160,7 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                       {notice.action.external && <ArrowIcon />}
                     </a>
                   ) : (
-                    <button type="button" className="ui-nsc__btn" onClick={notice.action.onClick}>
+                    <button type="button" className="ui-nsc__btn" dir="auto" onClick={notice.action.onClick}>
                       {notice.action.label}
                     </button>
                   ))}
@@ -291,6 +313,7 @@ const css = /* css */ `
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   min-height: 28px;
   margin-bottom: 8px;
 }
@@ -305,10 +328,15 @@ const css = /* css */ `
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--ui-nsc-text);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* Ghost icon button */
 .ui-nsc__close {
   display: grid;
+  flex: none;
   place-items: center;
   width: 28px;
   height: 28px;
@@ -324,6 +352,8 @@ const css = /* css */ `
   font-weight: 500;
   line-height: 24px;
   color: var(--ui-nsc-strong);
+  text-align: start;
+  overflow-wrap: anywhere;
 }
 .ui-nsc__text {
   margin: 2px 0 0;
@@ -332,17 +362,23 @@ const css = /* css */ `
   font-size: 13px;
   line-height: 20px;
   color: var(--ui-nsc-text);
+  text-align: start;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 /* Secondary button: white with the card's hairline shadow */
 .ui-nsc__btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  /* Grows with a long label instead of leaving the card */
+  min-height: 28px;
+  max-width: 100%;
   margin-top: 12px;
-  padding: 0 10px;
+  padding: 4px 10px;
   border-radius: 6px;
-  white-space: nowrap;
+  text-align: start;
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
@@ -350,7 +386,7 @@ const css = /* css */ `
   transition: background-color 140ms ease, box-shadow 140ms ease, transform 160ms var(--ui-nsc-ease);
 }
 :where(.ui-nsc) .ui-nsc__btn { background: var(--ui-nsc-card); box-shadow: var(--ui-nsc-shadow); color: var(--ui-nsc-strong); }
-.ui-nsc__btn:has(svg) { padding: 0 8px 0 10px; }
+.ui-nsc__btn:has(svg) { padding: 4px 8px 4px 10px; }
 .ui-nsc__btn:hover { box-shadow: var(--ui-nsc-shadow-hover); }
 .ui-nsc__btn:active { transform: scale(0.97); }
 .ui-nsc__btn svg { color: var(--ui-nsc-icon); }
@@ -363,8 +399,8 @@ const css = /* css */ `
 /* Touch screens: bigger tap targets */
 @media (pointer: coarse) {
   .ui-nsc__close { width: 36px; height: 36px; margin: -4px -4px -4px 0; }
-  .ui-nsc__btn { height: 36px; padding: 0 14px; }
-  .ui-nsc__btn:has(svg) { padding: 0 12px 0 14px; }
+  .ui-nsc__btn { min-height: 36px; padding: 8px 14px; }
+  .ui-nsc__btn:has(svg) { padding: 8px 12px 8px 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

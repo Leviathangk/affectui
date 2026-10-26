@@ -149,9 +149,11 @@ export function ToolCallCard({
           {icon ?? <WrenchIcon />}
         </span>
         <span className="ui-tc__main">
-          <code className="ui-tc__name">{name}</code>
+          <code className="ui-tc__name" title={name}>
+            {name}
+          </code>
           {summary != null && (
-            <span className="ui-tc__summary" title={typeof summary === "string" ? summary : undefined}>
+            <span className="ui-tc__summary" dir="auto" title={typeof summary === "string" ? summary : undefined}>
               {summary}
             </span>
           )}
@@ -177,7 +179,7 @@ export function ToolCallCard({
             {status === "error" && (
               <div className="ui-tc__error">
                 <ErrorIcon />
-                <p className="ui-tc__error-text">{error ?? "The tool call failed."}</p>
+                <p className="ui-tc__error-text" dir="auto">{error ?? "The tool call failed."}</p>
                 {onRetry && (
                   <button type="button" className="ui-tc__retry" onClick={onRetry}>
                     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -234,11 +236,16 @@ export function ToolCallGroup({
   const failed = calls.filter((c) => c.status === "error").length;
 
   // Time spent with tools running, added up across stretches (e.g. a pause before a retry)
-  const measured = useStopwatch(running, undefined, true);
+  // Counts from the earliest running card that knows when it started, so the group never shows less than its cards
+  const since = calls.reduce<number | undefined>(
+    (min, c) => (c.status === "running" && c.startedAt != null && (min == null || c.startedAt < min) ? c.startedAt : min),
+    undefined,
+  );
+  const measured = useStopwatch(running, since, true);
   const sum = calls.length && calls.every((c) => c.duration != null) ? calls.reduce((t, c) => t + (c.duration ?? 0), 0) : null;
   const ms = running ? measured : (duration ?? sum ?? measured);
 
-  const count = `Used ${calls.length} ${calls.length === 1 ? "tool" : "tools"}`;
+  const count = `Used ${calls.length.toLocaleString("en-US")} ${calls.length === 1 ? "tool" : "tools"}`;
   const title = running ? runningLabel : (label ?? count);
   const icons = calls.slice(-3);
 
@@ -293,6 +300,8 @@ export function ToolCallGroup({
 
 /* ---------- Pieces ---------- */
 
+const OPEN_MAX = 640;
+
 function CodeSection({ label, value, cap }: { label: string; value: unknown; cap: number }) {
   const { text, json } = toText(value);
   const pre = useRef<HTMLPreElement>(null);
@@ -323,7 +332,9 @@ function CodeSection({ label, value, cap }: { label: string; value: unknown; cap
         ref={pre}
         className="ui-tc__code"
         data-capped={(capped && !full) || undefined}
-        style={capped ? { maxHeight: full ? height : cap } : undefined}
+        data-scroll={(capped && full && height > OPEN_MAX) || undefined}
+        // Open, a very long block stops at a few screens and scrolls inside – no 200,000px card
+        style={capped ? { maxHeight: full ? Math.min(height, OPEN_MAX) : cap } : undefined}
       >
         <code>{json ? highlight(text) : text}</code>
       </pre>
@@ -424,12 +435,15 @@ function useStopwatch(running: boolean, startedAt: number | undefined, accumulat
   return ms;
 }
 
-/** 0.4s, 12.3s, 2m 05s – the live timer always shows tenths below a minute */
+/** 0.4s, 12.3s, 2m 05s, 3h 12m, 2d 4h – the live timer always shows tenths below a minute */
 function formatMs(ms: number, live: boolean) {
   if (!live && ms < 1000) return `${Math.max(1, Math.round(ms))}ms`;
   if (ms < 60_000) return `${(Math.floor(ms / 100) / 10).toFixed(1)}s`;
   const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  const h = Math.floor(s / 3600);
+  if (h < 24) return `${h}h ${String(Math.floor(s / 60) % 60).padStart(2, "0")}m`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
 function toText(value: unknown): { text: string; json: boolean } {
@@ -748,6 +762,7 @@ const css = /* css */ `
   pointer-events: none;
 }
 .ui-tc__code[data-capped]::after { opacity: 1; }
+.ui-tc__code[data-scroll] { overflow-y: auto; overscroll-behavior: contain; }
 .ui-tc__t-key { color: var(--ui-tc-key); }
 .ui-tc__t-str { color: var(--ui-tc-str); }
 .ui-tc__t-num { color: var(--ui-tc-num); }
@@ -780,7 +795,11 @@ const css = /* css */ `
 .ui-tc__error-text {
   flex: 1;
   min-width: 0;
+  max-height: 200px;
   margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  white-space: pre-line;
   color: var(--ui-tc-red);
   font-size: 13px;
   line-height: 1.45;

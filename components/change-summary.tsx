@@ -35,28 +35,42 @@ export function ChangeSummary({ title = "What's changed", period, icon, changes,
       <section className={["ui-cs", className].filter(Boolean).join(" ")} aria-label={title}>
         <header className="ui-cs__head">
           <span className="ui-cs__title">
-            {icon ?? <ChangesIcon />}
-            {title}
+            <span className="ui-cs__icon">{icon ?? <ChangesIcon />}</span>
+            <span className="ui-cs__title-text" dir="auto" title={title}>
+              {title}
+            </span>
           </span>
-          {period && <span className="ui-cs__period">{period}</span>}
+          {period && (
+            <span className="ui-cs__period" dir="auto" title={period}>
+              {period}
+            </span>
+          )}
         </header>
+        {changes.length > 0 && (
         <dl className="ui-cs__card">
           {changes.map((c, i) => {
-            const tone = c.tone ?? "neutral";
+            // Anything but good or bad reads as neutral, so the mark always has its tint
+            const tone = c.tone === "good" || c.tone === "bad" ? c.tone : "neutral";
             const direction = c.direction ?? (tone === "bad" ? "down" : "up");
             return (
-              <div key={c.label} className="ui-cs__row" style={{ animationDelay: `${120 + i * 70}ms` }}>
-                <dt className="ui-cs__label">{c.label}</dt>
+              // The stagger stops after twelve rows, so a long list is all there at once
+              <div key={`${i}-${c.label}`} className="ui-cs__row" style={{ animationDelay: `${120 + Math.min(i, 12) * 70}ms` }}>
+                <dt className="ui-cs__label" dir="auto" title={c.label}>
+                  {c.label}
+                </dt>
                 <dd className="ui-cs__change">
                   <span className="ui-cs__trend" data-tone={tone} aria-hidden="true">
                     {tone === "neutral" ? <DashIcon /> : <ArrowIcon down={direction === "down"} />}
                   </span>
-                  <span className="ui-cs__text">{c.change}</span>
+                  <span className="ui-cs__text" dir="auto" title={c.change}>
+                    {c.change}
+                  </span>
                 </dd>
               </div>
             );
           })}
         </dl>
+        )}
       </section>
     </>
   );
@@ -121,10 +135,16 @@ const css = /* css */ `
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-weight: 500;
   color: var(--ui-cs-accent);
 }
-.ui-cs__period { font-size: 13px; color: var(--ui-cs-muted); }
+.ui-cs__icon { display: grid; place-items: center; flex: none; width: 16px; height: 16px; overflow: hidden; }
+/* A custom icon – an image too – fits the 16px tile */
+.ui-cs__icon > :is(img, svg) { display: block; width: 16px; height: 16px; object-fit: contain; }
+.ui-cs__title-text { min-width: 0; overflow-wrap: anywhere; }
+/* The period shortens before it squeezes the title */
+.ui-cs__period { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; color: var(--ui-cs-muted); }
 
 .ui-cs__card {
   margin: 0;
@@ -153,6 +173,8 @@ const css = /* css */ `
   line-height: 20px;
   white-space: nowrap;
   text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  text-align: start;
 }
 .ui-cs__change {
   display: flex;
@@ -164,11 +186,12 @@ const css = /* css */ `
   line-height: 20px;
   color: var(--ui-cs-muted);
 }
-.ui-cs__text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The change keeps its numbers: it wraps up to three lines instead of being cut off */
+.ui-cs__text { display: -webkit-box; overflow: hidden; white-space: pre-line; overflow-wrap: anywhere; text-align: start; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 /* Narrow: each metric stacks above its change, so the text wraps instead of being cut off */
 @container (max-width: 400px) {
   .ui-cs__row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 11px 16px; }
-  .ui-cs__label, .ui-cs__text { white-space: normal; }
+  .ui-cs__label { white-space: normal; }
   .ui-cs__change { align-items: flex-start; }
 }
 .ui-cs__trend {

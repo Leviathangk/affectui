@@ -37,6 +37,8 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
   const patch = (id: string, next: Partial<State>) => setState((s) => ({ ...s, [id]: { ...s[id], ...next } }));
 
   const open = decisions.filter((d) => !state[d.id]?.answered).length;
+  // 1284 → "1,284"
+  const count = new Intl.NumberFormat("en").format(open);
 
   const decide = (d: Decision, answer: "primary" | "secondary") => {
     patch(d.id, { answered: answer === "primary" ? d.primary : d.secondary });
@@ -63,7 +65,7 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
             <>
               <AlertIcon />
               <span>
-                {open} {open === 1 ? "needs" : "need"} your input
+                {count} {open === 1 ? "needs" : "need"} your input
               </span>
             </>
           ) : (
@@ -82,27 +84,33 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
                 <div className="ui-di__row-inner">
                   <div className="ui-di__item" data-open={s.open || undefined} data-answered={s.answered ? true : undefined}>
                     {s.open ? (
-                      <p className="ui-di__title">{d.title}</p>
+                      <p className="ui-di__title" dir="auto">
+                        {d.title}
+                      </p>
                     ) : (
-                      <button type="button" className="ui-di__title ui-di__title--folded" onClick={() => patch(d.id, { open: true })}>
+                      <button type="button" className="ui-di__title ui-di__title--folded" dir="auto" title={d.title} onClick={() => patch(d.id, { open: true })}>
                         {d.title}
                       </button>
                     )}
                     <div className="ui-di__body" data-open={s.open || undefined}>
                       <div className="ui-di__body-inner">
-                        {d.detail && <p className="ui-di__detail">{d.detail}</p>}
+                        {d.detail && (
+                          <p className="ui-di__detail" dir="auto">
+                            {d.detail}
+                          </p>
+                        )}
                         <div className="ui-di__actions">
                           {s.answered ? (
                             <span className="ui-di__done" role="status">
                               <DoneIcon />
-                              {s.answered}
+                              <span dir="auto">{s.answered}</span>
                             </span>
                           ) : (
                             <>
-                              <button type="button" className="ui-di__btn ui-di__btn--primary" onClick={() => decide(d, "primary")}>
+                              <button type="button" className="ui-di__btn ui-di__btn--primary" dir="auto" onClick={() => decide(d, "primary")}>
                                 {d.primary}
                               </button>
-                              <button type="button" className="ui-di__btn" onClick={() => decide(d, "secondary")}>
+                              <button type="button" className="ui-di__btn" dir="auto" onClick={() => decide(d, "secondary")}>
                                 {d.secondary}
                               </button>
                             </>
@@ -213,10 +221,15 @@ const css = /* css */ `
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
-  text-align: left;
+  text-align: start;
   color: var(--ui-di-ink);
+  overflow-wrap: anywhere;
 }
 .ui-di__title--folded {
+  /* Still one line however long the title – it opens in full on click */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--ui-di-faint);
   transition: color 160ms ease;
 }
@@ -240,18 +253,23 @@ const css = /* css */ `
   font-size: 13px;
   line-height: 20px;
   color: var(--ui-di-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .ui-di__actions {
   display: flex;
   align-items: center;
+  /* Long or translated answers go on a second line instead of out of the card */
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 30px;
   margin-top: 12px;
 }
 
 .ui-di__btn {
-  height: 30px;
-  padding: 0 12px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 12px;
   border: 0;
   border-radius: 9px;
   background: #fff;
@@ -260,6 +278,7 @@ const css = /* css */ `
   font-weight: 500;
   line-height: 20px;
   color: var(--ui-di-ink);
+  overflow-wrap: anywhere;
   transition: background-color 160ms ease, transform 160ms ease;
 }
 .ui-di__btn:hover { background: #f7f7f7; }
@@ -278,9 +297,12 @@ const css = /* css */ `
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
+  max-width: 100%;
   color: var(--ui-di-ok);
+  overflow-wrap: anywhere;
   animation: ui-di-in 360ms var(--ui-di-ease);
 }
+.ui-di__done > span { min-width: 0; }
 
 .ui-di__empty {
   display: none;

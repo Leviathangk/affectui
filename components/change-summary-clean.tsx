@@ -38,27 +38,41 @@ export function ChangeSummary({ title = "What's changed", period, icon, changes,
         <header className="ui-csc__head">
           <span className="ui-csc__title">
             <span className="ui-csc__icon">{icon ?? <ChangesIcon />}</span>
-            {title}
+            <span className="ui-csc__title-text" dir="auto" title={title}>
+              {title}
+            </span>
           </span>
-          {period && <span className="ui-csc__period">{period}</span>}
+          {period && (
+            <span className="ui-csc__period" dir="auto" title={period}>
+              {period}
+            </span>
+          )}
         </header>
+        {changes.length > 0 && (
         <dl className="ui-csc__list">
           {changes.map((c, i) => {
-            const tone = c.tone ?? "neutral";
+            // Anything but good or bad reads as neutral, so the mark always has its tint
+            const tone = c.tone === "good" || c.tone === "bad" ? c.tone : "neutral";
             const direction = c.direction ?? (tone === "bad" ? "down" : "up");
             return (
-              <div key={c.label} className="ui-csc__row" style={{ animationDelay: `${120 + i * 70}ms` }}>
-                <dt className="ui-csc__label">{c.label}</dt>
+              // The stagger stops after twelve rows, so a long list is all there at once
+              <div key={`${i}-${c.label}`} className="ui-csc__row" style={{ animationDelay: `${120 + Math.min(i, 12) * 70}ms` }}>
+                <dt className="ui-csc__label" dir="auto" title={c.label}>
+                  {c.label}
+                </dt>
                 <dd className="ui-csc__change">
                   <span className="ui-csc__trend" data-tone={tone} aria-hidden="true">
                     {tone === "neutral" ? <DashIcon /> : <ArrowIcon down={direction === "down"} />}
                   </span>
-                  <span className="ui-csc__text">{c.change}</span>
+                  <span className="ui-csc__text" dir="auto" title={c.change}>
+                    {c.change}
+                  </span>
                 </dd>
               </div>
             );
           })}
         </dl>
+        )}
       </section>
     </>
   );
@@ -141,8 +155,12 @@ const css = /* css */ `
   white-space: nowrap;
   color: var(--ui-csc-strong);
 }
-.ui-csc__icon { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-csc-icon); }
-.ui-csc__period { flex: none; font-size: 12px; line-height: 16px; color: var(--ui-csc-muted); }
+.ui-csc__icon { display: grid; place-items: center; flex: none; width: 16px; height: 16px; overflow: hidden; color: var(--ui-csc-icon); }
+/* A custom icon – an image too – fits the 16px tile */
+.ui-csc__icon > :is(img, svg) { width: 16px; height: 16px; object-fit: contain; }
+.ui-csc__title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The period shortens before it pushes the title out */
+.ui-csc__period { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: ellipsis; color: var(--ui-csc-muted); }
 
 /* One row per metric, each under a hairline */
 .ui-csc__list { margin: 0; }
@@ -163,6 +181,8 @@ const css = /* css */ `
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  text-align: start;
   color: var(--ui-csc-ink);
 }
 .ui-csc__change {
@@ -173,7 +193,8 @@ const css = /* css */ `
   margin: 0;
   color: var(--ui-csc-text);
 }
-.ui-csc__text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The change keeps its numbers: it wraps up to three lines instead of being cut off */
+.ui-csc__text { display: -webkit-box; overflow: hidden; white-space: pre-line; overflow-wrap: anywhere; text-align: start; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 
 /* Trend mark: a small tinted square, no strokes */
 .ui-csc__trend {
@@ -192,7 +213,7 @@ const css = /* css */ `
 @container (max-width: 400px) {
   .ui-csc__head { padding: 0 14px; }
   .ui-csc__row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 10px 14px; }
-  .ui-csc__label, .ui-csc__text { white-space: normal; }
+  .ui-csc__label { white-space: normal; }
   .ui-csc__change { align-items: flex-start; }
 }
 /* Touch screens: a little more room per row */

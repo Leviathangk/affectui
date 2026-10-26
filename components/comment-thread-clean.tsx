@@ -43,8 +43,24 @@ function ago(time: number, now: number) {
   const m = Math.round(s / 60);
   if (m < 60) return `${m}min ago`;
   const h = Math.round(m / 60);
-  return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return d < 365 ? `${Math.round(d / 30)}mo ago` : `${Math.round(d / 365)}y ago`;
 }
+
+// 1284 → "1,284"
+const count = new Intl.NumberFormat("en");
+
+/** Two initials from whole letters – skips emoji and stray spaces, so "🦊 Fox" gives "F" */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((w) => Array.from(w).find((c) => /[\p{L}\p{N}]/u.test(c)))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
 export function CommentThread({
   title = "Comment",
@@ -117,9 +133,11 @@ export function CommentThread({
       </style>
       <section className={["ui-ctc", className].filter(Boolean).join(" ")} aria-label={title}>
         <header className="ui-ctc__head">
-          <h3 className="ui-ctc__title">{title}</h3>
+          <h3 className="ui-ctc__title" title={title} dir="auto">
+            {title}
+          </h3>
           <span className="ui-ctc__count">
-            {messages.length} {messages.length === 1 ? "message" : "messages"}
+            {count.format(messages.length)} {messages.length === 1 ? "message" : "messages"}
           </span>
           {onClose && (
             <button type="button" className="ui-ctc__icon-btn" aria-label="Close comment" onClick={onClose}>
@@ -138,13 +156,15 @@ export function CommentThread({
                 <article key={m.id} className="ui-ctc__msg" data-delayed={firstIds.has(m.id) || undefined}>
                   <div className="ui-ctc__meta">
                     <Avatar author={m.author} />
-                    <span className="ui-ctc__name">{m.author.name}</span>
+                    <span className="ui-ctc__name" title={m.author.name} dir="auto">
+                    {m.author.name}
+                  </span>
                     <time className="ui-ctc__time" dateTime={new Date(m.createdAt).toISOString()}>
                       {ago(+m.createdAt, now)}
                     </time>
                   </div>
                   {m.text && (
-                    <p className="ui-ctc__text">
+                    <p className="ui-ctc__text" dir="auto">
                       {command ? (
                         <>
                           <span className="ui-ctc__command">/edit</span> {m.text.trim().replace(/^\/edit\s*/i, "")}
@@ -166,7 +186,9 @@ export function CommentThread({
                         <svg viewBox="0 0 16 16" className="ui-ctc__check" aria-hidden="true">
                           <path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0Zm8.9-1.2a.5.5 0 0 0-.8-.6L7.44 9.23 6.35 8.15a.5.5 0 1 0-.7.7l1.5 1.5a.5.5 0 0 0 .76-.06l2.5-3.5Z" />
                         </svg>
-                        <span className="ui-ctc__status-text">{m.status}</span>
+                        <span className="ui-ctc__status-text" title={m.status} dir="auto">
+                          {m.status}
+                        </span>
                         {!!m.details?.length && (
                           <span className="ui-ctc__chevron">
                             <Icon d="m5 6.5 3 3 3-3" />
@@ -177,7 +199,7 @@ export function CommentThread({
                         <div className="ui-ctc__details" data-open={isOpen || undefined} inert={!isOpen}>
                           <ul>
                             {m.details.map((d, i) => (
-                              <li key={d} style={{ "--i": i } as CSSProperties}>
+                              <li key={i} dir="auto" style={{ "--i": i } as CSSProperties}>
                                 {d}
                               </li>
                             ))}
@@ -232,17 +254,15 @@ export function CommentThread({
 }
 
 function Avatar({ author }: { author: ThreadAuthor }) {
+  // A picture that fails to load falls back to the initials
+  const [failed, setFailed] = useState(false);
   if (author.avatar && typeof author.avatar !== "string") return <span className="ui-ctc__avatar">{author.avatar}</span>;
-  if (typeof author.avatar === "string") {
-    return <img className="ui-ctc__avatar" src={author.avatar} alt="" width={20} height={20} loading="lazy" />;
+  if (typeof author.avatar === "string" && !failed) {
+    return <img className="ui-ctc__avatar" src={author.avatar} alt="" width={20} height={20} loading="lazy" onError={() => setFailed(true)} />;
   }
   return (
     <span className="ui-ctc__avatar ui-ctc__avatar--initials" aria-hidden="true">
-      {author.name
-        .split(" ")
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join("")}
+      {initials(author.name)}
     </span>
   );
 }
@@ -366,8 +386,9 @@ const css = /* css */ `
   padding: 10px 10px 10px 16px;
   border-bottom: 0.5px solid var(--ui-ctc-line);
 }
-.ui-ctc__title { margin: 0; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ui-ctc-strong); }
-.ui-ctc__count { margin-right: auto; font-size: 12px; line-height: 16px; color: var(--ui-ctc-muted); font-variant-numeric: tabular-nums; }
+/* A long title takes two lines at most – the count and close stay in place */
+.ui-ctc__title { display: -webkit-box; min-width: 0; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; margin: 0; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ui-ctc-strong); }
+.ui-ctc__count { flex: none; margin-right: auto; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--ui-ctc-muted); font-variant-numeric: tabular-nums; }
 /* Close: a ghost icon button */
 .ui-ctc__icon-btn {
   display: grid;
@@ -419,7 +440,7 @@ img.ui-ctc__avatar { box-shadow: 0 0 0 0.5px var(--ui-ctc-avatar-ring); }
 .ui-ctc__name { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 500; line-height: 20px; white-space: nowrap; text-overflow: ellipsis; color: var(--ui-ctc-strong); }
 .ui-ctc__time { flex: none; margin-left: auto; font-size: 12px; line-height: 16px; white-space: nowrap; color: var(--ui-ctc-faint); font-variant-numeric: tabular-nums; }
 /* Text and status line up with the name, not the avatar */
-.ui-ctc__text { margin: 4px 0 0 28px; font-size: 13px; line-height: 20px; overflow-wrap: break-word; color: var(--ui-ctc-ink); }
+.ui-ctc__text { margin: 4px 0 0 28px; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; white-space: pre-line; text-align: start; color: var(--ui-ctc-ink); }
 /* "/edit": a small gray tag */
 .ui-ctc__command {
   display: inline-block;
@@ -453,7 +474,7 @@ img.ui-ctc__avatar { box-shadow: 0 0 0 0.5px var(--ui-ctc-avatar-ring); }
 .ui-ctc__status-btn:disabled { cursor: default; }
 .ui-ctc__status-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ui-ctc__check { width: 16px; height: 16px; fill: var(--ui-ctc-ok); }
-.ui-ctc__chevron { display: grid; color: var(--ui-ctc-icon); transition: transform 260ms var(--ui-ctc-ease), color 160ms ease; }
+.ui-ctc__chevron { display: grid; flex: none; color: var(--ui-ctc-icon); transition: transform 260ms var(--ui-ctc-ease), color 160ms ease; }
 .ui-ctc__status-btn:hover .ui-ctc__chevron { color: var(--ui-ctc-ink); }
 .ui-ctc__status-btn[aria-expanded="true"] .ui-ctc__chevron { transform: rotate(180deg); }
 .ui-ctc__details {
@@ -474,6 +495,8 @@ img.ui-ctc__avatar { box-shadow: 0 0 0 0.5px var(--ui-ctc-avatar-ring); }
   margin-top: 4px;
   font-size: 13px;
   line-height: 20px;
+  overflow-wrap: anywhere;
+  text-align: start;
   color: var(--ui-ctc-text);
   /* Closing: lines fade out quickly while the box folds */
   opacity: 0;

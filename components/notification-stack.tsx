@@ -34,6 +34,13 @@ const PEEK = 12; // how far each card behind peeks out below the one in front, i
 export function NotificationStack({ notices, onDismiss, className }: NotificationStackProps) {
   const [items, setItems] = useState(notices);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  // New notices from the parent join the stack; dismissed ones stay gone
+  const removed = useRef(new Set<string>());
+  const [given, setGiven] = useState(notices);
+  if (notices !== given) {
+    setGiven(notices);
+    setItems(notices.filter((n) => !removed.current.has(n.id)));
+  }
   const [heights, setHeights] = useState<Record<string, number>>({});
   const refs = useRef(new Map<string, HTMLElement>());
 
@@ -44,7 +51,8 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
   useLayoutEffect(() => {
     const measure = () => {
       const next: Record<string, number> = {};
-      refs.current.forEach((el, id) => (next[id] = el.offsetHeight));
+      // The full height, also for a card behind that is cut to the front card's height
+      refs.current.forEach((el, id) => (next[id] = el.scrollHeight + el.offsetHeight - el.clientHeight));
       setHeights(next);
     };
     measure();
@@ -57,6 +65,7 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
     setLeaving((s) => new Set(s).add(notice.id));
     onDismiss?.(notice);
     window.setTimeout(() => {
+      removed.current.add(notice.id);
       setItems((list) => list.filter((n) => n.id !== notice.id));
       setLeaving((s) => {
         const next = new Set(s);
@@ -82,9 +91,12 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
           const i = visible.findIndex((n) => n.id === notice.id);
           const gone = i === -1;
           const depth = Math.max(0, i);
+          // Only the cards that can show are rendered – a long list stays light
+          if (!gone && depth > 3) return null;
           const isBehind = !gone && depth > 0;
           // Cards behind are lined up on the front card's bottom edge, a little lower and smaller each
-          const y = gone || depth === 0 ? 0 : front - (heights[notice.id] ?? front) + Math.min(depth, 2) * PEEK;
+          // A card behind that is taller than the front one is cut to its height, so it never peeks out above
+          const y = gone || depth === 0 ? 0 : front - Math.min(heights[notice.id] ?? front, front) + Math.min(depth, 2) * PEEK;
           const scale = gone ? 1 : 1 - Math.min(depth, 2) * 0.05;
           return (
             <article
@@ -103,12 +115,19 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                 zIndex: gone ? 10 : 10 - depth,
                 transform: gone ? undefined : `translateY(${y}px) scale(${scale})`,
                 opacity: depth > 2 ? 0 : undefined,
+                maxHeight: isBehind && front ? front : undefined,
               }}
             >
               <Pattern kind={notice.pattern ?? "orbit"} />
               <div className="ui-ns__body">
                 <div className="ui-ns__top">
-                  {notice.badge ? <span className="ui-ns__badge">{notice.badge}</span> : <span />}
+                  {notice.badge ? (
+                    <span className="ui-ns__badge" dir="auto" title={notice.badge}>
+                      {notice.badge}
+                    </span>
+                  ) : (
+                    <span />
+                  )}
                   <button
                     type="button"
                     className="ui-ns__close"
@@ -121,14 +140,17 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                     <CloseIcon />
                   </button>
                 </div>
-                <h3 id={`${notice.id}-title`} className="ui-ns__title">
+                <h3 id={`${notice.id}-title`} className="ui-ns__title" dir="auto">
                   {notice.title}
                 </h3>
-                <p className="ui-ns__text">{notice.text}</p>
+                <p className="ui-ns__text" dir="auto">
+                  {notice.text}
+                </p>
                 {notice.action &&
                   (notice.action.href ? (
                     <a
                       className="ui-ns__btn"
+                      dir="auto"
                       href={notice.action.href}
                       onClick={notice.action.onClick}
                       {...(notice.action.external ? { target: "_blank", rel: "noreferrer" } : {})}
@@ -137,7 +159,7 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                       {notice.action.external && <ArrowIcon />}
                     </a>
                   ) : (
-                    <button type="button" className="ui-ns__btn" onClick={notice.action.onClick}>
+                    <button type="button" className="ui-ns__btn" dir="auto" onClick={notice.action.onClick}>
                       {notice.action.label}
                     </button>
                   ))}
@@ -273,6 +295,7 @@ const css = /* css */ `
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   min-height: 26px;
   margin-bottom: 14px;
 }
@@ -287,9 +310,14 @@ const css = /* css */ `
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #525252;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .ui-ns__close {
   display: grid;
+  flex: none;
   place-items: center;
   width: 28px;
   height: 28px;
@@ -309,6 +337,8 @@ const css = /* css */ `
   font-weight: 500;
   line-height: 22px;
   letter-spacing: -0.01em;
+  text-align: start;
+  overflow-wrap: anywhere;
 }
 .ui-ns__text {
   margin: 6px 0 0;
@@ -316,14 +346,19 @@ const css = /* css */ `
   font-size: 14px;
   line-height: 21px;
   color: var(--ui-ns-muted);
+  text-align: start;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 .ui-ns__btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 32px;
+  /* Grows with a long label instead of leaving the card */
+  min-height: 32px;
+  max-width: 100%;
   margin-top: 16px;
-  padding: 0 12px;
+  padding: 6px 12px;
   border: 0;
   border-radius: 9px;
   background: #fff;
@@ -332,13 +367,15 @@ const css = /* css */ `
   font-size: 13px;
   font-weight: 500;
   color: var(--ui-ns-ink);
+  text-align: start;
+  overflow-wrap: anywhere;
   text-decoration: none;
   cursor: pointer;
   transition: background-color 160ms ease, transform 160ms ease;
 }
 .ui-ns__btn:hover { background: #f7f7f7; }
 .ui-ns__btn:active { transform: scale(0.98); }
-.ui-ns__btn svg { color: var(--ui-ns-muted); }
+.ui-ns__btn svg { flex: none; color: var(--ui-ns-muted); }
 .ui-ns button:focus-visible,
 .ui-ns a:focus-visible { outline: 2px solid var(--ui-ns-accent); outline-offset: 2px; }
 

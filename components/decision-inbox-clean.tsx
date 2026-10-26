@@ -38,6 +38,8 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
   const patch = (id: string, next: Partial<State>) => setState((s) => ({ ...s, [id]: { ...s[id], ...next } }));
 
   const open = decisions.filter((d) => !state[d.id]?.answered).length;
+  // 1284 → "1,284"
+  const count = new Intl.NumberFormat("en").format(open);
 
   const decide = (d: Decision, answer: "primary" | "secondary") => {
     patch(d.id, { answered: answer === "primary" ? d.primary : d.secondary });
@@ -64,7 +66,7 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
             <>
               <AlertIcon />
               <span>
-                {open} {open === 1 ? "needs" : "need"} your input
+                {count} {open === 1 ? "needs" : "need"} your input
               </span>
             </>
           ) : (
@@ -83,27 +85,33 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
                 <div className="ui-dic__row-inner">
                   <div className="ui-dic__item" data-open={s.open || undefined} data-answered={s.answered ? true : undefined}>
                     {s.open ? (
-                      <p className="ui-dic__title">{d.title}</p>
+                      <p className="ui-dic__title" dir="auto">
+                        {d.title}
+                      </p>
                     ) : (
-                      <button type="button" className="ui-dic__title ui-dic__title--folded" onClick={() => patch(d.id, { open: true })}>
+                      <button type="button" className="ui-dic__title ui-dic__title--folded" dir="auto" title={d.title} onClick={() => patch(d.id, { open: true })}>
                         {d.title}
                       </button>
                     )}
                     <div className="ui-dic__body" data-open={s.open || undefined}>
                       <div className="ui-dic__body-inner">
-                        {d.detail && <p className="ui-dic__detail">{d.detail}</p>}
+                        {d.detail && (
+                          <p className="ui-dic__detail" dir="auto">
+                            {d.detail}
+                          </p>
+                        )}
                         <div className="ui-dic__actions">
                           {s.answered ? (
                             <span className="ui-dic__done" role="status">
                               <DoneIcon />
-                              {s.answered}
+                              <span dir="auto">{s.answered}</span>
                             </span>
                           ) : (
                             <>
-                              <button type="button" className="ui-dic__btn ui-dic__btn--primary" onClick={() => decide(d, "primary")}>
+                              <button type="button" className="ui-dic__btn ui-dic__btn--primary" dir="auto" onClick={() => decide(d, "primary")}>
                                 {d.primary}
                               </button>
-                              <button type="button" className="ui-dic__btn" onClick={() => decide(d, "secondary")}>
+                              <button type="button" className="ui-dic__btn" dir="auto" onClick={() => decide(d, "secondary")}>
                                 {d.secondary}
                               </button>
                             </>
@@ -228,11 +236,16 @@ const css = /* css */ `
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
-  text-align: left;
+  text-align: start;
   color: var(--ui-dic-strong);
+  overflow-wrap: anywhere;
 }
 /* A folded decision: one muted line that opens on click */
 :where(.ui-dic) .ui-dic__title--folded {
+  /* Still one line however long the title – it opens in full on click */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 14px 16px;
   font-weight: 400;
   color: var(--ui-dic-muted);
@@ -259,10 +272,14 @@ const css = /* css */ `
   font-size: 13px;
   line-height: 20px;
   color: var(--ui-dic-text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .ui-dic__actions {
   display: flex;
   align-items: center;
+  /* Long or translated answers go on a second line instead of out of the card */
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 28px;
   margin-top: 12px;
@@ -273,10 +290,12 @@ const css = /* css */ `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  padding: 0 10px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 10px;
   border-radius: 6px;
-  white-space: nowrap;
+  text-align: center;
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
@@ -294,16 +313,19 @@ const css = /* css */ `
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 10px 0 8px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 10px 4px 8px;
   border-radius: 6px;
   background: var(--ui-dic-ok-bg);
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
   color: var(--ui-dic-ok);
+  overflow-wrap: anywhere;
   animation: ui-dic-in 360ms var(--ui-dic-ease);
 }
+.ui-dic__done > span { min-width: 0; }
 
 .ui-dic__empty {
   display: none;
@@ -331,8 +353,8 @@ const css = /* css */ `
 }
 /* Touch screens: bigger tap targets */
 @media (pointer: coarse) {
-  .ui-dic__btn, .ui-dic__done { height: 36px; padding: 0 14px; }
-  .ui-dic__done { padding: 0 14px 0 12px; }
+  .ui-dic__btn, .ui-dic__done { min-height: 36px; padding: 8px 14px; }
+  .ui-dic__done { padding: 8px 14px 8px 12px; }
   .ui-dic__actions { min-height: 36px; }
   :where(.ui-dic) .ui-dic__title--folded { padding-top: 14px; padding-bottom: 14px; }
 }

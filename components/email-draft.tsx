@@ -42,7 +42,19 @@ const defaultContacts: DraftContact[] = [
   { name: "Finance team", email: "billing@northwind.io" },
 ];
 
-const first = (c: DraftContact) => c.name.split(" ")[0];
+const first = (c: DraftContact) => c.name.trim().split(/\s+/)[0] ?? "";
+// Two capitals from whole letters – emoji and stray spaces are skipped
+const initials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Without contacts there is no one to send to – the recipient button and Send step back
+const NO_ONE: DraftContact = { name: "", email: "" };
 
 const defaultTones: DraftTone[] = [
   {
@@ -80,9 +92,9 @@ export function EmailDraft({
   onDiscard,
   className,
 }: EmailDraftProps) {
-  const [to, setTo] = useState(contacts[0]);
+  const [to, setTo] = useState<DraftContact>(contacts[0] ?? NO_ONE);
   const [file, setFile] = useState<string | null>(attachment);
-  const [tone, setTone] = useState(tones[0].id);
+  const [tone, setTone] = useState(tones[0]?.id ?? "");
   // Edited text wins over the generated variant until the tone or recipient changes
   const [edited, setEdited] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -95,7 +107,7 @@ export function EmailDraft({
   const menuRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
 
-  const generated = tones.find((t) => t.id === tone)!.body(to);
+  const generated = tones.find((t) => t.id === tone)?.body(to) ?? "";
   const body = edited ?? generated;
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
@@ -146,12 +158,14 @@ export function EmailDraft({
   const pickContact = (c: DraftContact) => {
     setTo(c);
     setMenu(false);
-    // Keep manual edits, but follow the new name in the generated text
-    if (edited !== null) setEdited(edited.replace(new RegExp(`\\b${first(to)}\\b|${to.name}`, "g"), (m) => (m === to.name ? c.name : first(c))));
+    // Keep manual edits, but follow the new name in the generated text – the full name first, then the first name alone
+    const full = to.name.trim();
+    const parts = [full && escape(full), first(to) && `\\b${escape(first(to))}\\b`].filter(Boolean);
+    if (edited !== null && parts.length) setEdited(edited.replace(new RegExp(parts.join("|"), "g"), (m) => (m === full ? c.name.trim() : first(c))));
   };
 
   const send = () => {
-    if (phase !== "draft") return;
+    if (phase !== "draft" || !to.email) return;
     setEditing(false);
     setPhase("sending");
     timers.current.push(
@@ -183,11 +197,19 @@ export function EmailDraft({
       {/* The record the email is about */}
       <div className="ui-ed__record">
         <div className="ui-ed__ref">
-          <span className="ui-ed__id">{reference}</span>
-          <span className="ui-ed__status">{status}</span>
+          <span className="ui-ed__id" title={reference}>
+            {reference}
+          </span>
+          {status && (
+            <span className="ui-ed__status" dir="auto" title={status}>
+              {status}
+            </span>
+          )}
           <span className="ui-ed__amount">{amount}</span>
         </div>
-        <span className="ui-ed__account">{account}</span>
+        <span className="ui-ed__account" dir="auto">
+          {account}
+        </span>
       </div>
 
       {/* Card ↔ receipt, the height glides between them */}
@@ -198,31 +220,35 @@ export function EmailDraft({
               <div className="ui-ed__meta">
                 <div className="ui-ed__to" ref={menuRef}>
                   <span className="ui-ed__label">to</span>
-                  <button
-                    type="button"
-                    className="ui-ed__recipient"
-                    aria-haspopup="listbox"
-                    aria-expanded={menu}
-                    onClick={() => setMenu((m) => !m)}
-                  >
-                    {to.name} <span className="ui-ed__email">({to.email})</span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="m7 10 5 5 5-5" />
-                    </svg>
-                  </button>
+                  {to.email ? (
+                    <button
+                      type="button"
+                      className="ui-ed__recipient"
+                      aria-haspopup="listbox"
+                      aria-expanded={menu}
+                      title={`${to.name} <${to.email}>`}
+                      onClick={() => setMenu((m) => !m)}
+                    >
+                      <span className="ui-ed__name" dir="auto">
+                        {to.name}
+                      </span>{" "}
+                      <span className="ui-ed__email">({to.email})</span>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m7 10 5 5 5-5" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <span className="ui-ed__email">No recipient</span>
+                  )}
                   {menu && (
                     <ul className="ui-ed__menu" role="listbox" aria-label="Recipient">
-                      {contacts.map((c) => (
-                        <li key={c.email}>
+                      {contacts.map((c, i) => (
+                        <li key={`${c.email}-${i}`}>
                           <button type="button" role="option" aria-selected={c.email === to.email} onClick={() => pickContact(c)}>
                             <span className="ui-ed__avatar" aria-hidden="true">
-                              {c.name
-                                .split(" ")
-                                .map((p) => p[0])
-                                .join("")
-                                .slice(0, 2)}
+                              {initials(c.name)}
                             </span>
-                            <span className="ui-ed__menu-text">
+                            <span className="ui-ed__menu-text" dir="auto">
                               {c.name}
                               <small>{c.email}</small>
                             </span>
@@ -242,7 +268,9 @@ export function EmailDraft({
                     <Icon>
                       <path d="m15.5 7.5-6.4 6.4a1.8 1.8 0 0 0 2.5 2.5l6.7-6.7a3.5 3.5 0 0 0-5-5l-6.9 6.9a5.2 5.2 0 0 0 7.4 7.4l6-6" />
                     </Icon>
-                    {file}
+                    <span className="ui-ed__file-name" title={file}>
+                      {file}
+                    </span>
                     <button type="button" aria-label={`Remove ${file}`} onClick={() => setFile(null)}>
                       <Icon>
                         <path d="M7 7l10 10M17 7 7 17" />
@@ -255,7 +283,9 @@ export function EmailDraft({
                       <Icon>
                         <path d="M12 6v12M6 12h12" />
                       </Icon>
-                      Attach {attachment}
+                      <span className="ui-ed__file-name" title={attachment}>
+                        Attach {attachment}
+                      </span>
                     </button>
                   )
                 )}
@@ -266,6 +296,7 @@ export function EmailDraft({
                   <textarea
                     ref={textRef}
                     className="ui-ed__edit"
+                    dir="auto"
                     value={edited ?? ""}
                     onChange={(e) => setEdited(e.target.value)}
                     onKeyDown={(e) => {
@@ -279,7 +310,7 @@ export function EmailDraft({
                     aria-label="Email text"
                   />
                 ) : (
-                  <p key={toneKey} className="ui-ed__text" onClick={startEditing} title="Click to edit">
+                  <p key={toneKey} className="ui-ed__text" dir="auto" onClick={startEditing} title="Click to edit">
                     {body}{" "}
                     <a href={link.href} onClick={(e) => e.stopPropagation()}>
                       {link.label}
@@ -305,7 +336,7 @@ export function EmailDraft({
                   <button type="button" className="ui-ed__secondary" onClick={discard} disabled={phase === "sending"}>
                     Discard
                   </button>
-                  <button type="button" className="ui-ed__primary" onClick={send} disabled={phase === "sending"}>
+                  <button type="button" className="ui-ed__primary" onClick={send} disabled={phase === "sending" || !to.email}>
                     {phase === "sending" ? (
                       <>
                         <span className="ui-ed__spinner" aria-hidden="true" />
@@ -326,7 +357,7 @@ export function EmailDraft({
               <span className="ui-ed__receipt-text">
                 {phase === "sent" ? (
                   <>
-                    Sent to <b>{to.name}</b>
+                    Sent to <b dir="auto">{to.name}</b>
                     {file ? ` with ${file}` : ""}
                   </>
                 ) : (
@@ -342,7 +373,9 @@ export function EmailDraft({
       </div>
 
       <div className="ui-ed__foot">
-        <span className="ui-ed__agent">{agent}</span>
+        <span className="ui-ed__agent" title={agent}>
+          {agent}
+        </span>
         <span className="ui-ed__badge" data-tone={badge.tone} key={badge.text}>
           {badge.text}
         </span>
@@ -407,6 +440,7 @@ const css = /* css */ `
   --ui-ed-ease: cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
   max-width: 520px;
+  container-type: inline-size;
   padding: 6px;
   border-radius: 20px;
   background: var(--ui-ed-tray);
@@ -423,8 +457,13 @@ const css = /* css */ `
 
 .ui-ed__record { display: grid; gap: 2px; padding: 8px 10px 10px; }
 .ui-ed__ref { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ui-ed__id { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+/* The status gives way first, then the reference – the amount never does */
+.ui-ed__id { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
 .ui-ed__status {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 2px 8px;
   border-radius: 8px;
   background: var(--ui-ed-warn-bg);
@@ -433,8 +472,8 @@ const css = /* css */ `
   color: var(--ui-ed-warn);
   white-space: nowrap;
 }
-.ui-ed__amount { margin-left: auto; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.ui-ed__account { font-size: 13px; color: var(--ui-ed-muted); }
+.ui-ed__amount { flex: none; margin-left: auto; white-space: nowrap; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ui-ed__account { overflow-wrap: anywhere; font-size: 13px; color: var(--ui-ed-muted); }
 
 .ui-ed__outer { position: relative; }
 .ui-ed__outer[data-smooth] { transition: height 360ms var(--ui-ed-ease); }
@@ -480,7 +519,9 @@ const css = /* css */ `
   transition: background-color 160ms ease;
 }
 .ui-ed__recipient:hover { background: color-mix(in srgb, var(--ui-ed-chip) 80%, var(--ui-ed-ink) 6%); }
-.ui-ed__email { overflow: hidden; text-overflow: ellipsis; color: var(--ui-ed-muted); }
+/* A long name shortens; the address gives way before it */
+.ui-ed__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-ed__email { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ui-ed-muted); }
 .ui-ed__recipient svg { width: 14px; height: 14px; color: var(--ui-ed-muted); transition: transform 220ms var(--ui-ed-ease); }
 .ui-ed__recipient[aria-expanded="true"] svg { transform: rotate(180deg); }
 
@@ -492,6 +533,10 @@ const css = /* css */ `
   display: grid;
   gap: 2px;
   min-width: 250px;
+  max-width: calc(100cqw - 36px);
+  max-height: 288px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 5px;
   list-style: none;
@@ -527,8 +572,8 @@ const css = /* css */ `
   font-weight: 600;
   color: var(--ui-ed-text);
 }
-.ui-ed__menu-text { display: grid; flex: 1; min-width: 0; }
-.ui-ed__menu-text small { font-size: 12px; color: var(--ui-ed-muted); overflow: hidden; text-overflow: ellipsis; }
+.ui-ed__menu-text { display: grid; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ui-ed__menu-text small { font-size: 12px; color: var(--ui-ed-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ui-ed__tick { color: var(--ui-ed-ink); }
 
 .ui-ed__file {
@@ -536,12 +581,12 @@ const css = /* css */ `
   align-items: center;
   gap: 5px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-size: 13px;
   color: var(--ui-ed-muted);
   white-space: nowrap;
 }
+/* The file name shortens, the remove button always stays in reach */
+.ui-ed__file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-ed__file button,
 .ui-ed__attach {
   display: grid;
@@ -551,10 +596,10 @@ const css = /* css */ `
   color: var(--ui-ed-muted) !important;
   transition: background-color 160ms ease, color 160ms ease;
 }
-.ui-ed__file button { width: 20px; height: 20px; padding: 0; border-radius: 6px; }
+.ui-ed__file button { flex: none; width: 20px; height: 20px; padding: 0; border-radius: 6px; }
 .ui-ed__file button svg { width: 13px; height: 13px; }
 .ui-ed__file button:hover { background: var(--ui-ed-hover); color: var(--ui-ed-ink) !important; }
-.ui-ed__attach { display: inline-flex; gap: 4px; padding: 3px 6px; border-radius: 8px; font-size: 13px; white-space: nowrap; }
+.ui-ed__attach { display: inline-flex; min-width: 0; gap: 4px; padding: 3px 6px; border-radius: 8px; font-size: 13px; white-space: nowrap; }
 .ui-ed__attach:hover { background: var(--ui-ed-hover); color: var(--ui-ed-ink) !important; }
 
 /* Body */
@@ -566,6 +611,8 @@ const css = /* css */ `
   font-size: 15px;
   line-height: 1.6;
   color: var(--ui-ed-text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
   cursor: text;
   transition: background-color 160ms ease;
   animation: ui-ed-fade 280ms ease both;
@@ -606,7 +653,7 @@ const css = /* css */ `
   flex-wrap: wrap;
   padding: 10px 10px 10px 14px;
 }
-.ui-ed__tones { display: flex; align-items: center; gap: 2px; }
+.ui-ed__tones { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
 .ui-ed__tones button {
   display: inline-flex;
   align-items: center;
@@ -697,9 +744,11 @@ const css = /* css */ `
 
 /* ---------- Footer on the tray ---------- */
 
-.ui-ed__foot { display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; }
-.ui-ed__agent { font-size: 14px; color: var(--ui-ed-ink); }
+.ui-ed__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 10px 6px; }
+.ui-ed__agent { min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--ui-ed-ink); }
 .ui-ed__badge {
+  flex: none;
+  white-space: nowrap;
   padding: 2px 8px;
   border-radius: 8px;
   font-size: 12.5px;

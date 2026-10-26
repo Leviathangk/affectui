@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /*
  * Progress Tracker – a checklist with a progress bar, in a single self-contained file.
@@ -39,18 +39,26 @@ export function ProgressTracker({
   const [done, setDone] = useState(() => new Set(initial.filter((s) => s.done).map((s) => s.id)));
   const [playing, setPlaying] = useState(autoPlay);
 
+  // Steps added later bring their own done state; steps that go away no longer count
+  const seen = useRef(new Set(initial.map((s) => s.id)));
+  const ids = initial.map((s) => s.id).join("|");
+  useEffect(() => {
+    const fresh = initial.filter((s) => !seen.current.has(s.id));
+    fresh.forEach((s) => seen.current.add(s.id));
+    if (fresh.some((s) => s.done)) setDone((prev) => new Set([...prev, ...fresh.filter((s) => s.done).map((s) => s.id)]));
+  }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const total = initial.length;
-  const count = done.size;
+  const count = initial.filter((s) => done.has(s.id)).length;
   const progress = total ? count / total : 0;
 
-  const toggle = (id: string) =>
-    setDone((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      onChange?.(initial.map((s) => ({ ...s, done: next.has(s.id) })));
-      return next;
-    });
+  const toggle = (id: string) => {
+    const next = new Set(done);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setDone(next);
+    onChange?.(initial.map((s) => ({ ...s, done: next.has(s.id) })));
+  };
 
   // Auto play: tick the next open step; when all are done, start over
   useEffect(() => {
@@ -79,12 +87,14 @@ export function ProgressTracker({
       </style>
 
       <div className="ui-progressc__head">
-        <h3 className="ui-progressc__title">{title}</h3>
+        <h3 className="ui-progressc__title" dir="auto" title={title}>
+          {title}
+        </h3>
         <span className="ui-progressc__count" aria-hidden="true">
           <span className="ui-progressc__digit" key={count}>
-            {count}
+            {num.format(count)}
           </span>
-          /{total}
+          /{num.format(total)}
         </span>
       </div>
 
@@ -95,7 +105,7 @@ export function ProgressTracker({
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={count}
-        aria-valuetext={`${count} of ${total} done`}
+        aria-valuetext={`${num.format(count)} of ${num.format(total)} done`}
       >
         <span className="ui-progressc__fill" style={{ transform: `scaleX(${progress})` }}>
           {/* A new key replays the shine each time progress grows */}
@@ -107,7 +117,7 @@ export function ProgressTracker({
         {initial.map((step, index) => {
           const checked = done.has(step.id);
           return (
-            <li key={step.id} style={{ animationDelay: `${180 + index * 90}ms` }}>
+            <li key={step.id} style={{ animationDelay: `${180 + Math.min(index, 12) * 90}ms` }}>
               <button
                 type="button"
                 role="checkbox"
@@ -120,8 +130,9 @@ export function ProgressTracker({
                     <path d="M6.5 12.5l3.5 3.5 7.5-8" pathLength={1} />
                   </svg>
                 </span>
-                <span className="ui-progressc__label">
-                  <span>{step.label}</span>
+                <span className="ui-progressc__label" title={step.label || undefined}>
+                  {/* An empty label keeps the row's height */}
+                  <span dir="auto">{step.label || "\u00a0"}</span>
                 </span>
                 {step.icon && (
                   <span className="ui-progressc__icon" aria-hidden="true">
@@ -136,6 +147,9 @@ export function ProgressTracker({
     </div>
   );
 }
+
+// 1284 → "1,284"
+const num = new Intl.NumberFormat("en");
 
 /* ---------- Styles ---------- */
 
@@ -253,6 +267,8 @@ const css = /* css */ `
 
 .ui-progressc__list {
   display: grid;
+  /* One column that never grows past the card, so long labels shorten instead of pushing rows out */
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   margin: 0;
   padding: 0;
@@ -355,9 +371,14 @@ const css = /* css */ `
   color: var(--ui-pgc-icon);
   transition: opacity 300ms ease;
 }
-.ui-progressc__icon > svg {
+/* Any icon – an svg or an image of any shape – fits its 16px tile */
+.ui-progressc__icon {
+  overflow: hidden;
+}
+.ui-progressc__icon > :is(svg, img) {
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 .ui-progressc__step[aria-checked="true"] .ui-progressc__icon {
   opacity: 0.45;

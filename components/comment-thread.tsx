@@ -41,8 +41,24 @@ function ago(time: number, now: number) {
   const m = Math.round(s / 60);
   if (m < 60) return `${m}min ago`;
   const h = Math.round(m / 60);
-  return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return d < 365 ? `${Math.round(d / 30)}mo ago` : `${Math.round(d / 365)}y ago`;
 }
+
+// 1284 → "1,284"
+const count = new Intl.NumberFormat("en");
+
+/** Two initials from whole letters – skips emoji and stray spaces, so "🦊 Fox" gives "F" */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((w) => Array.from(w).find((c) => /[\p{L}\p{N}]/u.test(c)))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
 export function CommentThread({
   title = "Comment",
@@ -115,9 +131,11 @@ export function CommentThread({
       </style>
       <section className={["ui-ct", className].filter(Boolean).join(" ")} aria-label={title}>
         <header className="ui-ct__head">
-          <h3 className="ui-ct__title">{title}</h3>
+          <h3 className="ui-ct__title" title={title} dir="auto">
+            {title}
+          </h3>
           <span className="ui-ct__count">
-            {messages.length} {messages.length === 1 ? "message" : "messages"}
+            {count.format(messages.length)} {messages.length === 1 ? "message" : "messages"}
           </span>
           {onClose && (
             <button type="button" className="ui-ct__icon-btn" aria-label="Close comment" onClick={onClose}>
@@ -135,13 +153,15 @@ export function CommentThread({
               <article key={m.id} className="ui-ct__msg" data-delayed={firstIds.has(m.id) || undefined}>
                 <div className="ui-ct__meta">
                   <Avatar author={m.author} />
-                  <span className="ui-ct__name">{m.author.name}</span>
+                  <span className="ui-ct__name" title={m.author.name} dir="auto">
+                    {m.author.name}
+                  </span>
                   <time className="ui-ct__time" dateTime={new Date(m.createdAt).toISOString()}>
                     {ago(+m.createdAt, now)}
                   </time>
                 </div>
                 {m.text && (
-                  <p className="ui-ct__text">
+                  <p className="ui-ct__text" dir="auto">
                     {command ? (
                       <>
                         <span className="ui-ct__command">/Edit</span> {m.text.trim().replace(/^\/edit\s*/i, "")}
@@ -163,7 +183,9 @@ export function CommentThread({
                       <span className="ui-ct__check">
                         <Icon d="m4 8.3 2.6 2.6L12 5.4" size={12} />
                       </span>
-                      {m.status}
+                      <span className="ui-ct__status-text" title={m.status} dir="auto">
+                        {m.status}
+                      </span>
                       {!!m.details?.length && (
                         <span className="ui-ct__chevron">
                           <Icon d="m4.5 6.25 3.5 3.5 3.5-3.5" size={14} />
@@ -174,7 +196,7 @@ export function CommentThread({
                       <div className="ui-ct__details" data-open={isOpen || undefined} inert={!isOpen}>
                         <ul>
                           {m.details.map((d, i) => (
-                            <li key={d} style={{ "--i": i } as CSSProperties}>
+                            <li key={i} dir="auto" style={{ "--i": i } as CSSProperties}>
                               {d}
                             </li>
                           ))}
@@ -222,17 +244,15 @@ export function CommentThread({
 }
 
 function Avatar({ author }: { author: ThreadAuthor }) {
+  // A picture that fails to load falls back to the initials
+  const [failed, setFailed] = useState(false);
   if (author.avatar && typeof author.avatar !== "string") return <span className="ui-ct__avatar">{author.avatar}</span>;
-  if (typeof author.avatar === "string") {
-    return <img className="ui-ct__avatar" src={author.avatar} alt="" width={24} height={24} loading="lazy" />;
+  if (typeof author.avatar === "string" && !failed) {
+    return <img className="ui-ct__avatar" src={author.avatar} alt="" width={24} height={24} loading="lazy" onError={() => setFailed(true)} />;
   }
   return (
     <span className="ui-ct__avatar ui-ct__avatar--initials" aria-hidden="true">
-      {author.name
-        .split(" ")
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join("")}
+      {initials(author.name)}
     </span>
   );
 }
@@ -330,8 +350,9 @@ const css = /* css */ `
   min-height: 46px;
   padding: 6px 10px 6px 18px;
 }
-.ui-ct__title { margin: 0; font-size: 15px; font-weight: 500; line-height: 22px; }
-.ui-ct__count { margin-right: auto; font-size: 12.5px; color: var(--ui-ct-muted); }
+/* A long title takes two lines at most – the count and close stay in place */
+.ui-ct__title { display: -webkit-box; min-width: 0; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; margin: 0; font-size: 15px; font-weight: 500; line-height: 22px; }
+.ui-ct__count { flex: none; margin-right: auto; white-space: nowrap; font-size: 12.5px; color: var(--ui-ct-muted); }
 .ui-ct__icon-btn {
   display: grid;
   place-items: center;
@@ -363,12 +384,12 @@ const css = /* css */ `
   scrollbar-width: thin;
 }
 /* Each message builds up piece by piece: name row, text, status – the assistant's first reply a beat later */
-.ui-ct__msg { --ui-ct-d: 0ms; }
+.ui-ct__msg { --ui-ct-d: 0ms; min-width: 0; }
 .ui-ct__msg[data-delayed] { --ui-ct-d: 700ms; }
 .ui-ct__msg > * { animation: ui-ct-in 420ms var(--ui-ct-ease) both; animation-delay: var(--ui-ct-d); }
 .ui-ct__msg > :nth-child(2) { animation-delay: calc(var(--ui-ct-d) + 80ms); }
 .ui-ct__msg > :nth-child(3) { animation-delay: calc(var(--ui-ct-d) + 160ms); }
-.ui-ct__meta { display: flex; align-items: center; gap: 9px; }
+.ui-ct__meta { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .ui-ct__avatar {
   display: grid;
   place-items: center;
@@ -382,9 +403,9 @@ const css = /* css */ `
 img.ui-ct__avatar { box-shadow: 0 0 0 1px var(--ui-ct-avatar-ring); }
 .ui-ct__avatar svg { width: 100%; height: 100%; }
 .ui-ct__avatar--initials { background: var(--ui-ct-initials); font-size: 9px; font-weight: 600; color: var(--ui-ct-accent-text); }
-.ui-ct__name { font-size: 14px; font-weight: 500; line-height: 20px; }
-.ui-ct__time { margin-left: auto; font-size: 12.5px; color: var(--ui-ct-muted); font-variant-numeric: tabular-nums; }
-.ui-ct__text { margin: 8px 0 0; font-size: 14px; line-height: 21px; color: var(--ui-ct-text); }
+.ui-ct__name { min-width: 0; overflow: hidden; font-size: 14px; font-weight: 500; line-height: 20px; white-space: nowrap; text-overflow: ellipsis; }
+.ui-ct__time { flex: none; margin-left: auto; white-space: nowrap; font-size: 12.5px; color: var(--ui-ct-muted); font-variant-numeric: tabular-nums; }
+.ui-ct__text { margin: 8px 0 0; font-size: 14px; line-height: 21px; overflow-wrap: anywhere; white-space: pre-line; text-align: start; color: var(--ui-ct-text); }
 .ui-ct__command { color: var(--ui-ct-muted); }
 
 .ui-ct__status { margin-top: 8px; }
@@ -392,6 +413,7 @@ img.ui-ct__avatar { box-shadow: 0 0 0 1px var(--ui-ct-avatar-ring); }
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  max-width: 100%;
   height: 26px;
   padding: 0 6px 0 8px;
   border: 0;
@@ -404,6 +426,8 @@ img.ui-ct__avatar { box-shadow: 0 0 0 1px var(--ui-ct-avatar-ring); }
 .ui-ct .ui-ct__status-btn { margin-left: -4px; }
 .ui-ct__status-btn:hover:not(:disabled) { background: var(--ui-ct-row-hover); }
 .ui-ct__status-btn:disabled { cursor: default; }
+.ui-ct__status-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ui-ct__check, .ui-ct__chevron { flex: none; }
 .ui-ct__check {
   display: grid;
   place-items: center;
@@ -433,6 +457,8 @@ img.ui-ct__avatar { box-shadow: 0 0 0 1px var(--ui-ct-avatar-ring); }
   margin-top: 6px;
   font-size: 13px;
   line-height: 19px;
+  overflow-wrap: anywhere;
+  text-align: start;
   color: var(--ui-ct-muted);
   /* Closing: lines fade out quickly while the box folds */
   opacity: 0;
