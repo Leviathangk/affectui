@@ -3,6 +3,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -57,12 +58,12 @@ export type SegmentedControlProps<T extends string = string> = {
 };
 
 export function SegmentedControl<T extends string = string>({
-  options,
+  options: rawOptions,
   value,
   defaultValue,
   onChange,
-  size = "md",
-  variant = "buttons",
+  size: sizeProp = "md",
+  variant: variantProp = "buttons",
   fullWidth = false,
   kind = "radio",
   disabled = false,
@@ -70,6 +71,18 @@ export function SegmentedControl<T extends string = string>({
   "aria-labelledby": ariaLabelledby,
   className,
 }: SegmentedControlProps<T>) {
+  // Gaps and repeated values are dropped – one value, one option
+  const options = useMemo(() => {
+    const seen = new Set<string>();
+    return (Array.isArray(rawOptions) ? rawOptions : []).filter((o): o is SegmentOption<T> => {
+      if (!o || o.value == null || seen.has(String(o.value))) return false;
+      seen.add(String(o.value));
+      return true;
+    });
+  }, [rawOptions]);
+  // Unknown sizes and variants fall back to the defaults
+  const size = sizeProp === "sm" || sizeProp === "lg" ? sizeProp : "md";
+  const variant = variantProp === "tray" || variantProp === "underline" ? variantProp : "buttons";
   const [inner, setInner] = useState<T | undefined>(() => defaultValue ?? options.find((o) => !o.disabled)?.value);
   const current = value !== undefined ? value : inner;
 
@@ -327,9 +340,12 @@ export function SegmentedControl<T extends string = string>({
           <span ref={pill} className="ui-segc__pill" aria-hidden="true" />
           {options.map((o, i) => {
             const active = i === activeIndex;
+            // Without a label or icon the value names the option; NaN counts show nothing
+            const label = o.label ?? (o.icon ? null : String(o.value));
+            const count = countText(o.count);
             return (
               <button
-                key={o.value}
+                key={String(o.value)}
                 type="button"
                 className="ui-segc__opt"
                 role={isTabs ? "tab" : "radio"}
@@ -344,12 +360,20 @@ export function SegmentedControl<T extends string = string>({
                 onClick={() => select(o.value)}
               >
                 <span className="ui-segc__content">
-                  {o.icon && <span className="ui-segc__icon">{o.icon}</span>}
+                  {o.icon && (
+                    <span className="ui-segc__icon" onErrorCapture={(e) => ((e.target as HTMLElement).style.visibility = "hidden")}>
+                      {o.icon}
+                    </span>
+                  )}
                   {/* One weight for both states – only the color changes, so nothing shifts */}
-                  {o.label != null && <span className="ui-segc__label">{o.label}</span>}
-                  {o.count != null && (
-                    <span key={String(o.count)} className="ui-segc__count">
-                      {o.count}
+                  {label != null && (
+                    <span className="ui-segc__label" dir="auto">
+                      {label}
+                    </span>
+                  )}
+                  {count != null && count !== "" && (
+                    <span key={String(count)} className="ui-segc__count">
+                      {count}
                     </span>
                   )}
                   {o.badge != null && <span className="ui-segc__badge">{o.badge}</span>}
@@ -363,6 +387,9 @@ export function SegmentedControl<T extends string = string>({
   );
 }
 
+
+/** 1284 → "1,284"; NaN and Infinity show nothing */
+const countText = (c: number | string | undefined) => (typeof c === "number" ? (Number.isFinite(c) ? c.toLocaleString("en-US") : null) : c);
 
 const css = /* css */ `
 /* Animatable custom properties: the equal segment width and the soft edges glide too */
@@ -476,7 +503,10 @@ const css = /* css */ `
 .ui-segc[data-size="sm"] .ui-segc__content { gap: 5px; }
 .ui-segc__icon { display: grid; place-items: center; width: var(--ui-segc-icon); height: var(--ui-segc-icon); color: rgba(0, 0, 0, 0.447); transition: color 90ms ease; }
 .ui-segc__opt[data-active] .ui-segc__icon { color: var(--ui-segc-ink); }
-.ui-segc__icon svg { width: 100%; height: 100%; }
+.ui-segc__icon svg, .ui-segc__icon img { width: 100%; height: 100%; }
+/* Images fill the tile without leaving it, whatever their shape */
+.ui-segc__icon { overflow: hidden; }
+.ui-segc__icon img { display: block; object-fit: contain; }
 .ui-segc__label { display: block; }
 
 .ui-segc__count {

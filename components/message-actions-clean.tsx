@@ -108,7 +108,7 @@ export function MessageText({ version, children, className }: { version: string 
       <style href="ui-message-actions-clean" precedence="default">
         {css}
       </style>
-      <div ref={inner} className="ui-mac-text__inner">
+      <div ref={inner} className="ui-mac-text__inner" dir="auto">
         <Swap id={String(version)} className="ui-mac-text__swap">
           {children}
         </Swap>
@@ -142,11 +142,17 @@ const icons = {
 };
 
 const DEFAULT_ACTIONS: MessageActionKey[] = ["copy", "regenerate", "feedback", "speak"];
+/** Known actions only, each once – an unknown key or a repeat would render a stray or doubled button */
+const cleanActions = (list: unknown): MessageActionKey[] =>
+  Array.isArray(list) ? [...new Set(list)].filter((k): k is MessageActionKey => DEFAULT_ACTIONS.includes(k)) : DEFAULT_ACTIONS;
+/** A whole, finite number or the fallback */
+const whole = (n: unknown, fallback: number) => (typeof n === "number" && Number.isFinite(n) ? Math.floor(n) : fallback);
+const fmt = (n: number) => n.toLocaleString("en-US");
 const DEFAULT_REASONS = ["Not accurate", "Too long", "Didn't follow instructions", "Other"];
 
 export function MessageActions({
   text,
-  actions = DEFAULT_ACTIONS,
+  actions: actionsProp = DEFAULT_ACTIONS,
   versions,
   version,
   defaultVersion,
@@ -164,10 +170,11 @@ export function MessageActions({
   className,
 }: MessageActionsProps) {
   const uid = useId();
-  const count = Math.max(1, typeof versions === "number" ? Math.floor(versions) : (versions?.length ?? 1));
+  const actions = cleanActions(actionsProp);
+  const count = Math.max(1, whole(typeof versions === "number" ? versions : Array.isArray(versions) ? versions.length : 1, 1));
 
   /* ----- Versions ----- */
-  const [inner, setInner] = useState(() => Math.min(count - 1, Math.max(0, defaultVersion ?? count - 1)));
+  const [inner, setInner] = useState(() => Math.min(count - 1, Math.max(0, whole(defaultVersion, count - 1))));
   const [seenCount, setSeenCount] = useState(count);
   const [vote, setVote] = useState<FeedbackKind | null>(null);
   const [panel, setPanel] = useState(false);
@@ -183,13 +190,13 @@ export function MessageActions({
     }
     setSeenCount(count);
   }
-  const index = Math.min(count - 1, Math.max(0, version ?? inner));
+  const index = Math.min(count - 1, Math.max(0, whole(version, inner)));
   const goTo = (i: number) => {
     const next = Math.min(count - 1, Math.max(0, i));
     if (next === index) return;
     if (version === undefined) setInner(next);
     onVersionChange?.(next);
-    announce(`Version ${next + 1} of ${count}`);
+    announce(`Version ${fmt(next + 1)} of ${fmt(count)}`);
   };
 
   /* ----- Status line for screen readers ----- */
@@ -204,7 +211,11 @@ export function MessageActions({
     return () => window.clearTimeout(t);
   }, [copied]);
   const copy = () => {
-    if (text !== undefined) navigator.clipboard?.writeText(text).catch(() => {});
+    try {
+      if (text !== undefined) navigator.clipboard?.writeText(text).catch(() => {});
+    } catch {
+      // No clipboard here (insecure page, old browser) – the check still confirms the press
+    }
     onCopy?.(text);
     setCopied(Date.now());
     announce("Copied");
@@ -266,7 +277,7 @@ export function MessageActions({
   const [innerSpeaking, setInnerSpeaking] = useState(false);
   const playing = speaking ?? innerSpeaking;
   const words = text ? text.trim().split(/\s+/).length : 0;
-  const duration = speakDuration ?? Math.max(2600, words * 380);
+  const duration = typeof speakDuration === "number" && speakDuration > 0 ? speakDuration : Math.max(2600, words * 380);
   useEffect(() => {
     if (speaking !== undefined || !innerSpeaking) return;
     const t = window.setTimeout(() => {
@@ -370,12 +381,12 @@ export function MessageActions({
               >
                 <Glyph d={icons.next} solid />
               </button>
-              <span className="ui-mac__count" aria-label={`Version ${index + 1} of ${count}`}>
+              <span className="ui-mac__count" aria-label={`Version ${fmt(index + 1)} of ${fmt(count)}`}>
                 <Swap id={String(index)} className="ui-mac__count-now">
-                  {index + 1}
+                  {fmt(index + 1)}
                 </Swap>
                 <span aria-hidden="true">/</span>
-                <Swap id={String(count)}>{count}</Swap>
+                <Swap id={String(count)}>{fmt(count)}</Swap>
               </span>
               <button
                 type="button"
@@ -479,14 +490,16 @@ export function MessageActions({
                 </button>
               </div>
               <div className="ui-mac__chips">
-                {reasons.map((r) => (
+                {(Array.isArray(reasons) ? reasons : []).map((r, i) => (
                   <button
-                    key={r}
+                    key={`${r}-${i}`}
                     type="button"
                     className="ui-mac__chip"
                     aria-pressed={reason === r}
                     disabled={sent}
                     onClick={() => setReason(reason === r ? null : r)}
+                    title={r}
+                    dir="auto"
                   >
                     {r}
                   </button>
@@ -511,13 +524,14 @@ export function MessageActions({
                   </Swap>
                 </button>
               </div>
-              {reasons.includes("Other") && (
+              {Array.isArray(reasons) && reasons.includes("Other") && (
                 <div className="ui-mac__fold" data-open={reason === "Other" && !sent ? "" : undefined} inert={reason !== "Other" || sent}>
                   <div className="ui-mac__clip">
                     <input
                       className="ui-mac__input"
                       value={other}
                       placeholder="Tell us more (optional)"
+                      dir="auto"
                       aria-label="What went wrong, in your words"
                       onChange={(e) => setOther(e.target.value)}
                       onKeyDown={(e) => {
@@ -583,7 +597,8 @@ const css = /* css */ `
 .ui-mac__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ----- The bar: quiet until the message is hovered, something inside is focused or busy ----- */
-.ui-mac__bar { display: flex; align-items: center; gap: 2px; min-height: 28px; transition: opacity 240ms ease; }
+/* Wraps to a second row in a very narrow message instead of running out of it */
+.ui-mac__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-height: 28px; transition: opacity 240ms ease; }
 .ui-mac[data-quiet] .ui-mac__bar { opacity: 0.6; }
 .ui-mac[data-quiet]:hover .ui-mac__bar,
 .ui-mac[data-quiet]:focus-within .ui-mac__bar,
@@ -664,7 +679,7 @@ const css = /* css */ `
 .ui-mac__close:hover { background: var(--ui-mac-wash); color: var(--ui-mac-ink); }
 .ui-mac__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 /* Reasons: the tab-button look – a hairline, gray text; the picked one gets the gray fill */
-.ui-mac__chip { height: 28px; padding: 4px 10px; border-radius: 6px; box-shadow: inset 0 0 0 0.5px var(--ui-mac-line); font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ui-mac-text); white-space: nowrap; transition: background-color 140ms ease, color 140ms ease, opacity 200ms ease; }
+.ui-mac__chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; height: 28px; padding: 4px 10px; border-radius: 6px; box-shadow: inset 0 0 0 0.5px var(--ui-mac-line); font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ui-mac-text); white-space: nowrap; transition: background-color 140ms ease, color 140ms ease, opacity 200ms ease; }
 .ui-mac__chip:hover:not(:disabled) { background: var(--ui-mac-wash); color: var(--ui-mac-ink); }
 .ui-mac__chip[aria-pressed="true"], .ui-mac__chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--ui-mac-fill); color: var(--ui-mac-ink); }
 .ui-mac__chip:disabled { cursor: default; }
@@ -681,6 +696,7 @@ const css = /* css */ `
 /* ----- Message text that crossfades between versions (MessageText) ----- */
 .ui-mac-text { overflow: hidden; transition: height 360ms var(--ui-mac-ease, cubic-bezier(0.22, 1, 0.36, 1)); }
 .ui-mac-text__swap { display: grid; }
+.ui-mac-text__inner { min-width: 0; overflow-wrap: anywhere; }
 .ui-mac-text__swap > .ui-mac__swap-item { display: block; animation: ui-mac-text-in 420ms ease both; }
 .ui-mac-text__swap > .ui-mac__swap-item[data-out] { animation: ui-mac-out 260ms ease both; }
 

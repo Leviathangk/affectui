@@ -3,6 +3,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -56,12 +57,12 @@ export type SegmentedControlProps<T extends string = string> = {
 };
 
 export function SegmentedControl<T extends string = string>({
-  options,
+  options: rawOptions,
   value,
   defaultValue,
   onChange,
-  size = "md",
-  variant = "tray",
+  size: sizeProp = "md",
+  variant: variantProp = "tray",
   fullWidth = false,
   kind = "radio",
   disabled = false,
@@ -69,6 +70,18 @@ export function SegmentedControl<T extends string = string>({
   "aria-labelledby": ariaLabelledby,
   className,
 }: SegmentedControlProps<T>) {
+  // Gaps and repeated values are dropped – one value, one option
+  const options = useMemo(() => {
+    const seen = new Set<string>();
+    return (Array.isArray(rawOptions) ? rawOptions : []).filter((o): o is SegmentOption<T> => {
+      if (!o || o.value == null || seen.has(String(o.value))) return false;
+      seen.add(String(o.value));
+      return true;
+    });
+  }, [rawOptions]);
+  // Unknown sizes and variants fall back to the defaults
+  const size = sizeProp === "sm" || sizeProp === "lg" ? sizeProp : "md";
+  const variant = variantProp === "underline" ? variantProp : "tray";
   const [inner, setInner] = useState<T | undefined>(() => defaultValue ?? options.find((o) => !o.disabled)?.value);
   const current = value !== undefined ? value : inner;
 
@@ -326,9 +339,12 @@ export function SegmentedControl<T extends string = string>({
           <span ref={pill} className="ui-seg__pill" aria-hidden="true" />
           {options.map((o, i) => {
             const active = i === activeIndex;
+            // Without a label or icon the value names the option; NaN counts show nothing
+            const label = o.label ?? (o.icon ? null : String(o.value));
+            const count = countText(o.count);
             return (
               <button
-                key={o.value}
+                key={String(o.value)}
                 type="button"
                 className="ui-seg__opt"
                 role={isTabs ? "tab" : "radio"}
@@ -343,19 +359,23 @@ export function SegmentedControl<T extends string = string>({
                 onClick={() => select(o.value)}
               >
                 <span className="ui-seg__content">
-                  {o.icon && <span className="ui-seg__icon">{o.icon}</span>}
-                  {o.label != null && (
+                  {o.icon && (
+                    <span className="ui-seg__icon" onErrorCapture={(e) => ((e.target as HTMLElement).style.visibility = "hidden")}>
+                      {o.icon}
+                    </span>
+                  )}
+                  {label != null && (
                     // The semibold copy reserves the width; the two crossfade, so nothing shifts
-                    <span className="ui-seg__label">
-                      <span className="ui-seg__text">{o.label}</span>
+                    <span className="ui-seg__label" dir="auto">
+                      <span className="ui-seg__text">{label}</span>
                       <span className="ui-seg__text ui-seg__text-bold" aria-hidden="true">
-                        {o.label}
+                        {label}
                       </span>
                     </span>
                   )}
-                  {o.count != null && (
-                    <span key={String(o.count)} className="ui-seg__count">
-                      {o.count}
+                  {count != null && count !== "" && (
+                    <span key={String(count)} className="ui-seg__count">
+                      {count}
                     </span>
                   )}
                   {o.badge != null && <span className="ui-seg__badge">{o.badge}</span>}
@@ -368,6 +388,9 @@ export function SegmentedControl<T extends string = string>({
     </div>
   );
 }
+
+/** 1284 → "1,284"; NaN and Infinity show nothing */
+const countText = (c: number | string | undefined) => (typeof c === "number" ? (Number.isFinite(c) ? c.toLocaleString("en-US") : null) : c);
 
 const css = /* css */ `
 /* Animatable custom properties: the equal segment width and the soft edges glide too */
@@ -477,7 +500,10 @@ const css = /* css */ `
 
 .ui-seg__content { display: inline-flex; flex: none; align-items: center; gap: 6px; }
 .ui-seg__icon { display: grid; place-items: center; width: var(--ui-seg-icon); height: var(--ui-seg-icon); }
-.ui-seg__icon svg { width: 100%; height: 100%; }
+.ui-seg__icon svg, .ui-seg__icon img { width: 100%; height: 100%; }
+/* Images fill the tile without leaving it, whatever their shape */
+.ui-seg__icon { overflow: hidden; }
+.ui-seg__icon img { display: block; object-fit: contain; }
 
 /* Regular and semibold copies of the label crossfade */
 .ui-seg__label { display: grid; justify-items: center; }

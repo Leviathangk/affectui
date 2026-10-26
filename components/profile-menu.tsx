@@ -36,6 +36,10 @@ export type ProfileMenuProps = {
   className?: string;
 };
 
+// Counts get separators; anything that isn't a finite number reads as 0
+const count = new Intl.NumberFormat("en");
+const finite = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : 0);
+
 export function ProfileMenu({
   name,
   email,
@@ -45,6 +49,10 @@ export function ProfileMenu({
   className,
 }: ProfileMenuProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  // Gaps in the list are skipped, an image that fails to load falls back to the default avatar
+  const list = (Array.isArray(items) ? items : []).filter((item): item is ProfileMenuItem => !!item && typeof item === "object");
+  const [broken, setBroken] = useState(false);
+  const shownName = typeof name === "string" ? name.trim() : "";
   // The progress bar fills up once the card is on screen
   const [filled, setFilled] = useState(false);
   const rootRef = useRef<HTMLElement>(null);
@@ -81,19 +89,33 @@ export function ProfileMenu({
       <section ref={rootRef} className={["ui-pm", className].filter(Boolean).join(" ")} data-filled={filled || undefined}>
         <div className="ui-pm__card">
         <header className="ui-pm__user">
-          <span className="ui-pm__avatar">{avatar ?? <DefaultAvatar />}</span>
+          <span className="ui-pm__avatar" onErrorCapture={() => setBroken(true)}>
+            {avatar && !broken ? avatar : <DefaultAvatar />}
+          </span>
           <span className="ui-pm__who">
-            <span className="ui-pm__name">{name}</span>
-            <span className="ui-pm__email">{email}</span>
+            {shownName && (
+              <span className="ui-pm__name" dir="auto" title={shownName}>
+                {shownName}
+              </span>
+            )}
+            <span className="ui-pm__email" dir="auto" title={email}>
+              {email}
+            </span>
           </span>
         </header>
 
         <div ref={listRef} className="ui-pm__items" role="menu" aria-label="Account" onKeyDown={onKey}>
-          {items.map((item) => (
-            <button key={item.id} type="button" role="menuitem" className="ui-pm__item" onClick={item.onSelect}>
+          {list.map((item, i) => (
+            <button key={`${item.id}-${i}`} type="button" role="menuitem" className="ui-pm__item" onClick={item.onSelect}>
               <span className="ui-pm__icon">{item.icon}</span>
-              <span className="ui-pm__label">{item.label}</span>
-              {item.badge && <span className="ui-pm__badge">{item.badge}</span>}
+              <span className="ui-pm__label" dir="auto" title={item.label}>
+                {item.label}
+              </span>
+              {item.badge && (
+                <span className="ui-pm__badge" dir="auto" title={item.badge}>
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -106,8 +128,10 @@ export function ProfileMenu({
 }
 
 /** Compact setup progress in the gray extension: count, bar and the next step on one line */
-function SetupProgress({ done, total, next, onContinue }: ProfileSetup) {
-  const ratio = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
+function SetupProgress({ done: rawDone, total: rawTotal, next, onContinue }: ProfileSetup) {
+  const total = Math.max(0, finite(rawTotal));
+  const done = Math.min(total, Math.max(0, finite(rawDone)));
+  const ratio = total > 0 ? done / total : 0;
   const percent = Math.round(ratio * 100);
   const open = next && done < total;
   return (
@@ -115,7 +139,7 @@ function SetupProgress({ done, total, next, onContinue }: ProfileSetup) {
       <div className="ui-pm__setup-head">
         <span className="ui-pm__setup-title">Profile setup</span>
         <span className="ui-pm__setup-count">
-          {Math.min(done, total)}/{total}
+          {count.format(done)}/{count.format(total)}
         </span>
       </div>
       <span
@@ -130,7 +154,7 @@ function SetupProgress({ done, total, next, onContinue }: ProfileSetup) {
       </span>
       {open && (
         <button type="button" className="ui-pm__next" onClick={onContinue}>
-          <span className="ui-pm__next-label">
+          <span className="ui-pm__next-label" dir="auto" title={next}>
             <span className="ui-pm__next-hint">Next:</span> {next}
           </span>
           <ArrowIcon />
@@ -253,14 +277,17 @@ const css = /* css */ `
   flex: none;
   width: 42px;
   height: 42px;
+  overflow: hidden;
+  border-radius: 50%;
   color: var(--ui-pm-fill);
 }
-.ui-pm__avatar > * { display: block; width: 100%; height: 100%; }
+.ui-pm__avatar > * { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ui-pm__who {
   display: grid;
   min-width: 0;
 }
 .ui-pm__name {
+  overflow-wrap: anywhere;
   font-size: 15px;
   font-weight: 500;
   line-height: 22px;
@@ -274,9 +301,14 @@ const css = /* css */ `
   text-overflow: ellipsis;
 }
 
+/* The column may shrink, so long labels shorten instead of widening the card; a long list scrolls */
 .ui-pm__items {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .ui-pm__item {
   display: flex;
@@ -329,6 +361,10 @@ const css = /* css */ `
 }
 .ui-pm__badge {
   flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--ui-pm-badge-wash);

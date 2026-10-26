@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ComponentPropsWithRef,
+  type SyntheticEvent,
   type ReactNode,
 } from "react";
 
@@ -37,13 +38,19 @@ export function Button({
   className,
   disabled,
   onClick,
+  onPointerEnter,
   type = "button",
   ref,
   ...rest
 }: ButtonProps) {
   // The shimmer copies the label, so it only works on plain text
   const text = typeof children === "string" ? children : undefined;
-  const iconOnly = !children && Boolean(icon || iconRight);
+  // An empty string or false is no label – the icon stays centered
+  const hasLabel = children != null && children !== false && children !== "";
+  const iconOnly = !hasLabel && Boolean(icon || iconRight);
+  // Unknown values fall back to the defaults instead of an unstyled button
+  const tone = VARIANTS.includes(variant) ? variant : "primary";
+  const scale = SIZES.includes(size) ? size : "md";
 
   // Morph: when label or icon change, the width glides to its new size and the new content blurs in.
   // Nothing animates on the first render.
@@ -84,8 +91,8 @@ export function Button({
       <button
         type={type}
         className={["ui-button", className].filter(Boolean).join(" ")}
-        data-variant={variant}
-        data-size={size}
+        data-variant={tone}
+        data-size={scale}
         data-loading={loading || undefined}
         data-icon-only={iconOnly || undefined}
         data-ready={ready || undefined}
@@ -104,21 +111,27 @@ export function Button({
           }
           onClick?.(event);
         }}
+        onPointerEnter={(event) => {
+          // A label cut short shows its full text on hover
+          const label = event.currentTarget.querySelector<HTMLElement>(".ui-button__label");
+          if (label && text && !rest.title) label.title = label.scrollWidth > label.clientWidth + 1 ? text : "";
+          onPointerEnter?.(event);
+        }}
         {...rest}
       >
         {/* New keys remount the parts that changed, which replays their enter animation */}
         {icon && (
-          <span className="ui-button__icon" aria-hidden="true" key={`icon-${iconKey}`}>
+          <span className="ui-button__icon" aria-hidden="true" key={`icon-${iconKey}`} onErrorCapture={hideBroken}>
             {loading ? <Spinner /> : icon}
           </span>
         )}
-        {children != null && (
-          <span className="ui-button__label" data-text={text} key={`label-${labelKey}`}>
+        {hasLabel && (
+          <span className="ui-button__label" data-text={text} dir="auto" key={`label-${labelKey}`}>
             {children}
           </span>
         )}
         {iconRight && (
-          <span className="ui-button__icon" aria-hidden="true" key={`icon-right-${iconRightKey}`}>
+          <span className="ui-button__icon" aria-hidden="true" key={`icon-right-${iconRightKey}`} onErrorCapture={hideBroken}>
             {iconRight}
           </span>
         )}
@@ -126,6 +139,14 @@ export function Button({
     </>
   );
 }
+
+const VARIANTS = ["primary", "secondary", "ghost", "destructive"];
+const SIZES = ["sm", "md", "lg"];
+
+/** An icon image that fails to load leaves an empty slot instead of a broken-image glyph */
+const hideBroken = (event: SyntheticEvent<HTMLElement>) => {
+  if (event.target instanceof HTMLImageElement) event.target.style.visibility = "hidden";
+};
 
 /** Shown in place of the left icon while loading */
 const Spinner = () => (
@@ -205,6 +226,8 @@ const css = /* css */ `
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.01em;
+  max-width: 100%;
+  min-width: 0;
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
@@ -313,9 +336,17 @@ const css = /* css */ `
   width: var(--icon);
   height: var(--icon);
 }
-.ui-button__icon > svg {
+.ui-button__icon {
+  overflow: hidden;
+}
+.ui-button__icon > svg,
+.ui-button__icon > img {
+  display: block;
   width: 100%;
   height: 100%;
+}
+.ui-button__icon > img {
+  object-fit: contain;
 }
 
 /* Morph: the button clips while its width glides; changed parts blur in */
@@ -330,8 +361,14 @@ const css = /* css */ `
 }
 
 /* Loading: a band sweeps across a copy of the label, like "Request approval" in the Chat Composer */
+/* A label too long for its parent ends in "…" – the full text shows on hover */
 .ui-button__label {
   position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Room for descenders now that the label clips */
+  line-height: normal;
 }
 .ui-button__label::after {
   content: attr(data-text);

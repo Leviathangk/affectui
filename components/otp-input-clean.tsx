@@ -52,8 +52,23 @@ export type OtpInputProps = {
 
 /* ---------- Helpers ---------- */
 
-/** "0:24" */
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+const pad = (n: number) => String(n).padStart(2, "0");
+/** "0:24", "1:05:00", "3d 1h" */
+const clock = (s: number) => {
+  if (s >= 86400) return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+  if (s >= 3600) return `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+  return `${Math.floor(s / 60)}:${pad(s % 60)}`;
+};
+
+/** Longest code the boxes are drawn for – past that the cells get too small to read */
+const MAX_LENGTH = 24;
+
+/** Full-width (１２３) and Arabic-Indic digits (٤٨٢) count as the digits they are */
+const normalize = (text: string) =>
+  text
+    .normalize("NFKC")
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x660))
+    .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x6f0));
 
 const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -63,7 +78,7 @@ const icons = {
 };
 
 export function OtpInput({
-  length = 6,
+  length: lengthProp = 6,
   separator = false,
   numeric = true,
   value,
@@ -75,17 +90,21 @@ export function OtpInput({
   clearOnError = true,
   successLabel = "Verified",
   onResend,
-  resendIn = 30,
+  resendIn: resendInProp = 30,
   align = "start",
   disabled = false,
   autoFocus = false,
   label = "Verification code",
   className,
 }: OtpInputProps) {
+  // A NaN or fractional length and a NaN countdown fall back instead of breaking the field
+  const length = Number.isFinite(lengthProp) ? Math.min(MAX_LENGTH, Math.max(1, Math.floor(lengthProp))) : 6;
+  const resendIn = Number.isFinite(resendInProp) && resendInProp > 0 ? Math.floor(resendInProp) : 0;
+
   /** Keeps allowed characters only – spaces and dashes of a pasted "482 913" fall away */
   const clean = (text: string) => {
     let out = "";
-    for (const ch of text) {
+    for (const ch of normalize(String(text ?? ""))) {
       const c = numeric ? (/[0-9]/.test(ch) ? ch : "") : /[a-z0-9]/i.test(ch) ? ch.toUpperCase() : "";
       if (c && out.length < length) out += c;
     }
@@ -227,7 +246,20 @@ export function OtpInput({
     // The pill starts as wide as all the boxes and morphs down to its label
     const p = pill.current;
     const s = slots.current;
-    if (p && s && pillInner.current) p.style.width = `${status === "success" ? pillInner.current.offsetWidth : s.offsetWidth}px`;
+    if (p && s && pillInner.current) {
+      const w = status === "success" ? pillInner.current.offsetWidth : s.offsetWidth;
+      p.style.width = `${w}px`;
+      // A label wider than the boxes slides back inside the field instead of hanging over its edge
+      const root = s.parentElement?.parentElement;
+      let shift = 0;
+      if (root && w > s.offsetWidth) {
+        const box = root.getBoundingClientRect();
+        const own = s.getBoundingClientRect();
+        const left = own.left + own.width / 2 - w / 2;
+        shift = Math.min(Math.max(left, box.left), box.right - w) - left;
+      }
+      p.style.marginLeft = shift ? `${shift}px` : "";
+    }
   });
 
   // Phones turning, containers resizing: ring and pill follow
@@ -343,6 +375,7 @@ export function OtpInput({
         <div
           ref={slots}
           className="ui-otpc__slots"
+          dir="ltr"
           data-clearing={clearing || undefined}
           style={{ "--n": length, "--sep-w": sepAt > 0 && sepAt < length ? "calc(var(--ui-otpc-gap) + 8px)" : "0px" } as CSSProperties}
         >
@@ -355,7 +388,9 @@ export function OtpInput({
               <svg viewBox="0 0 24 24" className="ui-otpc__check" aria-hidden="true">
                 <path d={icons.check} pathLength={1} />
               </svg>
-              {successLabel}
+              <span className="ui-otpc__pill-text" title={successLabel}>
+                {successLabel}
+              </span>
             </span>
           </span>
           <input
@@ -370,7 +405,7 @@ export function OtpInput({
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="done"
-            aria-label={`${label}, ${length} ${numeric ? "digits" : "characters"}`}
+            aria-label={`${label}, ${length} ${numeric ? (length === 1 ? "digit" : "digits") : length === 1 ? "character" : "characters"}`}
             aria-invalid={showError || undefined}
             aria-describedby={showError ? `${id}-msg` : undefined}
             disabled={disabled}
@@ -589,6 +624,7 @@ const css = /* css */ `
 }
 .ui-otpc__pill-inner {
   display: inline-flex;
+  max-width: 100cqi; /* a long label shortens instead of leaving the field */
   align-items: center;
   gap: 6px;
   padding: 0 14px 0 12px;
@@ -600,6 +636,7 @@ const css = /* css */ `
   opacity: 0;
   transition: opacity 160ms ease;
 }
+.ui-otpc__pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-otpc__check { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--ui-otpc-success); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-otpc__check path { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 120ms ease; }
 .ui-otpc[data-status="success"] .ui-otpc__box {
@@ -622,6 +659,7 @@ const css = /* css */ `
 .ui-otpc__msg-inner { min-height: 0; overflow: hidden; }
 .ui-otpc__msg-text {
   margin: 0;
+  overflow-wrap: anywhere;
   padding-top: 8px;
   font-size: 12px;
   line-height: 16px;

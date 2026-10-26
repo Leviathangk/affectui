@@ -32,18 +32,30 @@ export type ThinkingLoaderProps = {
 
 const DEFAULT_PHASES = ["Thinking", "Searching the web", "Reading sources", "Writing response"];
 const RAYS = Array.from({ length: 8 }, (_, i) => i);
+// 75s reads "1m 15s", a long run "2h 05m" or "3d 4h"
+const took = (s: number) => {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
+};
 
 export function ThinkingLoader({
-  phases = DEFAULT_PHASES,
-  interval = 2200,
+  phases: phasesProp = DEFAULT_PHASES,
+  interval: intervalProp = 2200,
   phase,
   loop = false,
   done = false,
-  doneLabel = (s) => `Thought for ${s}s`,
+  doneLabel = (s) => `Thought for ${took(s)}`,
   size = "md",
   variant = "pill",
   className,
 }: ThinkingLoaderProps) {
+  // An empty or missing list still says something; 0 or NaN never spins the timer every frame
+  const given = Array.isArray(phasesProp) ? phasesProp.map((p) => String(p ?? "")) : [];
+  const phases = given.length ? given : DEFAULT_PHASES.slice(0, 1);
+  const interval = Number.isFinite(intervalProp) && intervalProp > 0 ? Math.max(intervalProp, 200) : 2200;
   const [step, setStep] = useState(0);
   const [started, setStarted] = useState(() => Date.now());
   const [seconds, setSeconds] = useState<number | null>(null);
@@ -59,15 +71,16 @@ export function ThinkingLoader({
 
   // Advance through the phases on a timer – unless the phase is controlled
   useEffect(() => {
-    if (done || phase !== undefined || phases.length < 2) return;
+    if (done || (phase !== undefined && Number.isFinite(phase)) || phases.length < 2) return;
     const id = window.setInterval(() => {
       setStep((s) => (s + 1 < phases.length ? s + 1 : loop ? 0 : s));
     }, interval);
     return () => window.clearInterval(id);
   }, [done, phase, phases.length, interval, loop]);
 
-  const index = Math.min(Math.max(phase ?? step, 0), Math.max(phases.length - 1, 0));
-  const label = done ? (typeof doneLabel === "function" ? doneLabel(elapsed) : doneLabel) : (phases[index] ?? "");
+  const wanted = phase !== undefined && Number.isFinite(phase) ? Math.floor(phase) : step;
+  const index = Math.min(Math.max(wanted, 0), Math.max(phases.length - 1, 0));
+  const label = String((done ? (typeof doneLabel === "function" ? doneLabel(elapsed) : doneLabel) : phases[index]) ?? "");
 
   // The label on screen and the one rolling out – swapped during render so both animate in the same frame
   const [shown, setShown] = useState({ key: 0, text: label });
@@ -78,25 +91,50 @@ export function ThinkingLoader({
   }
 
   // The text box takes the width of the incoming label, so the pill glides to its new size
+  const root = useRef<HTMLSpanElement>(null);
   const box = useRef<HTMLSpanElement>(null);
   const current = useRef<HTMLSpanElement>(null);
   const measured = useRef(false);
-  useLayoutEffect(() => {
+  // Width of the label, capped by the room next to the spinner – a label that doesn't fit ends in "…"
+  const fit = useRef(() => {});
+  fit.current = () => {
+    const r = root.current;
     const b = box.current;
     const c = current.current;
-    if (!b || !c) return;
+    if (!r || !b || !c) return;
+    // Layout pixels (offset/scroll/client), so it stays right inside a CSS zoom or transform (+1 covers rounding)
+    const full = c.scrollWidth + 1;
+    const parent = r.parentElement;
+    const pad = parent ? getComputedStyle(parent) : null;
+    const inner = parent && pad ? parent.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight) : 0;
+    const room = parent ? Math.floor(inner - (r.offsetWidth - b.offsetWidth)) : full;
+    const cut = room > 0 && full > room;
+    r.toggleAttribute("data-cut", cut);
+    b.style.width = `${cut ? room : full}px`;
+  };
+  useLayoutEffect(() => {
+    const b = box.current;
+    if (!b) return;
     if (!measured.current) b.style.transition = "none";
-    // offsetWidth is in layout pixels, so it stays right inside a CSS zoom or transform (+1 covers rounding)
-    b.style.width = `${c.offsetWidth + 1}px`;
+    fit.current();
     if (!measured.current) {
       b.getBoundingClientRect();
       b.style.transition = "";
       measured.current = true;
     }
   }, [shown.key]);
+  // A container that narrows or widens gets the label fitted again
+  useEffect(() => {
+    const parent = root.current?.parentElement;
+    if (!parent || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => fit.current());
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <span
+      ref={root}
       className={["ui-tl", className].filter(Boolean).join(" ")}
       data-size={size}
       data-variant={variant}
@@ -134,6 +172,7 @@ export function ThinkingLoader({
             key={leaving.key}
             className="ui-tl__label ui-tl__label--out"
             aria-hidden="true"
+            dir="auto"
             onAnimationEnd={() => setLeaving(null)}
           >
             {leaving.text}
@@ -144,6 +183,8 @@ export function ThinkingLoader({
           ref={current}
           className={["ui-tl__label", shown.key > 0 && "ui-tl__label--in", !done && "ui-tl__shine"].filter(Boolean).join(" ")}
           data-text={shown.text}
+          title={shown.text}
+          dir="auto"
         >
           {shown.text}
         </span>
@@ -180,6 +221,7 @@ const css = /* css */ `
   font-weight: 450;
   line-height: 1;
   letter-spacing: -0.006em;
+  max-width: 100%;
   vertical-align: middle;
   -webkit-font-smoothing: antialiased;
 }
@@ -244,9 +286,11 @@ const css = /* css */ `
 }
 
 /* The text box glides to the width of the incoming label; labels roll through it */
+/* min-width 0: in a narrow container the box gives way and the label ends in "…" */
 .ui-tl__text {
   position: relative;
   display: block;
+  min-width: 0;
   height: 1.3em;
   overflow: hidden;
   transition: width 460ms var(--ui-tl-ease);
@@ -257,6 +301,11 @@ const css = /* css */ `
   left: 0;
   line-height: 1.3em;
   white-space: nowrap;
+}
+.ui-tl[data-cut] .ui-tl__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ui-tl[data-done] .ui-tl__label {
   color: var(--ui-tl-ink);

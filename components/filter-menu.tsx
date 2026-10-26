@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
 /*
  * Filter Menu – grouped filters with chips, in a single self-contained file.
@@ -38,10 +38,10 @@ export type FilterMenuProps = {
   className?: string;
 };
 
-type Row = { kind: "group"; group: FilterGroup } | { kind: "option"; group: FilterGroup; option: FilterOption };
+type Row = { kind: "group"; group: FilterGroup; gi: number } | { kind: "option"; group: FilterGroup; option: FilterOption; gi: number; oi: number };
 
 export function FilterMenu({
-  groups,
+  groups: rawGroups,
   value,
   defaultValue = {},
   onChange,
@@ -50,6 +50,15 @@ export function FilterMenu({
   hints = true,
   className,
 }: FilterMenuProps) {
+  // Gaps, groups without an options list and options without a label are skipped; ids stay as given
+  const groups = (Array.isArray(rawGroups) ? rawGroups : [])
+    .filter((g): g is FilterGroup => !!g && typeof g === "object")
+    .map((g) => ({
+      ...g,
+      label: String(g.label ?? ""),
+      options: (Array.isArray(g.options) ? g.options : []).filter((o): o is FilterOption => !!o && typeof o === "object").map((o) => ({ ...o, label: String(o.label ?? "") })),
+    }));
+  const uid = useId();
   const [inner, setInner] = useState<FilterValue>(defaultValue);
   const picked = value ?? inner;
   const [open, setOpen] = useState<Set<string>>(() => new Set(defaultOpen ?? groups.slice(0, 1).map((g) => g.id)));
@@ -62,9 +71,11 @@ export function FilterMenu({
     if (value === undefined) setInner(next);
     onChange?.(next);
   };
-  const isOn = (g: string, o: string) => picked[g]?.includes(o) ?? false;
+  // Only lists count – a string or a stray value in `value` picks nothing
+  const pickedIn = (g: string) => (Array.isArray(picked[g]) ? picked[g] : []);
+  const isOn = (g: string, o: string) => pickedIn(g).includes(o);
   const toggle = (g: string, o: string) => {
-    const cur = picked[g] ?? [];
+    const cur = pickedIn(g);
     commit({ ...picked, [g]: cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o] });
   };
   const toggleGroup = (g: string) =>
@@ -75,17 +86,21 @@ export function FilterMenu({
       return next;
     });
 
-  // Chips in the order of the groups and their options
+  // Chips in the order of the groups and their options – one per picked id, even if an id repeats
+  const seen = new Set<string>();
   const chips = groups.flatMap((g) =>
-    g.options.filter((o) => isOn(g.id, o.id)).map((o) => ({ group: g, option: o, label: `${g.chipPrefix ?? ""}${o.label}` })),
+    g.options
+      .filter((o) => isOn(g.id, o.id) && !seen.has(`${g.id}\u0000${o.id}`) && !!seen.add(`${g.id}\u0000${o.id}`))
+      .map((o) => ({ group: g, option: o, label: `${g.chipPrefix ?? ""}${o.label}` })),
   );
 
   // Everything the arrow keys can reach, top to bottom
-  const rows: Row[] = groups.flatMap((g) => [
-    { kind: "group", group: g } as Row,
-    ...(open.has(g.id) ? g.options.map((o) => ({ kind: "option", group: g, option: o }) as Row) : []),
+  // Keys come from positions, so groups or options that share an id stay reachable
+  const rows: Row[] = groups.flatMap((g, gi) => [
+    { kind: "group", group: g, gi } as Row,
+    ...(open.has(g.id) ? g.options.map((o, oi) => ({ kind: "option", group: g, option: o, gi, oi }) as Row) : []),
   ]);
-  const keyOf = (r: Row) => (r.kind === "group" ? `g:${r.group.id}` : `o:${r.group.id}:${r.option.id}`);
+  const keyOf = (r: Row) => (r.kind === "group" ? `g:${r.gi}` : `o:${r.gi}:${r.oi}`);
 
   const moveTo = (key: string) => {
     setFocus(key);
@@ -108,7 +123,7 @@ export function FilterMenu({
       if (e.key === "ArrowRight" && !open.has(g)) toggleGroup(g);
       if (e.key === "ArrowLeft") {
         if (open.has(g)) toggleGroup(g);
-        moveTo(`g:${g}`);
+        moveTo(`g:${row.gi}`);
       }
     } else if (row && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
@@ -125,7 +140,9 @@ export function FilterMenu({
 
       <div className="ui-fm__card">
         <div className="ui-fm__head">
-          <span className="ui-fm__title">{title}</span>
+          <span className="ui-fm__title" dir="auto" title={title}>
+          {title}
+        </span>
           <button type="button" className="ui-fm__clear" disabled={chips.length === 0} onClick={() => commit({})}>
             Clear all
           </button>
@@ -134,9 +151,11 @@ export function FilterMenu({
         {/* Active filters – the box glides to its new height as chips come and go */}
         <div className="ui-fm__chips-outer" ref={chipsOuter}>
           <div className="ui-fm__chips" ref={chipsInner} aria-live="polite">
-            {chips.map((c) => (
-              <span key={`${c.group.id}:${c.option.id}`} className="ui-fm__chip">
-                {c.label}
+            {chips.map((c, i) => (
+              <span key={i} className="ui-fm__chip">
+                <span className="ui-fm__chip-label" dir="auto" title={c.label}>
+                  {c.label}
+                </span>
                 <button type="button" aria-label={`Remove ${c.label}`} onClick={() => toggle(c.group.id, c.option.id)}>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
@@ -148,40 +167,42 @@ export function FilterMenu({
         </div>
 
         <div className="ui-fm__groups" ref={listRef} onKeyDown={onKeyDown}>
-          {groups.map((g) => {
+          {groups.map((g, gi) => {
             const isOpen = open.has(g.id);
-            const count = picked[g.id]?.length ?? 0;
-            const gKey = `g:${g.id}`;
+            const count = new Set(pickedIn(g.id).filter((id) => g.options.some((o) => o.id === id))).size;
+            const gKey = `g:${gi}`;
             return (
-              <section key={g.id} className="ui-fm__group" data-open={isOpen ? "" : undefined}>
+              <section key={`${g.id}#${gi}`} className="ui-fm__group" data-open={isOpen ? "" : undefined}>
                 <button
                   type="button"
                   className="ui-fm__group-head"
                   data-key={gKey}
-                  tabIndex={focus === gKey || (focus === null && g === groups[0]) ? 0 : -1}
+                  tabIndex={focus === gKey || (focus === null && gi === 0) ? 0 : -1}
                   aria-expanded={isOpen}
-                  aria-controls={`${g.id}-options`}
+                  aria-controls={`${uid}-${gi}`}
                   onFocus={() => setFocus(gKey)}
                   onClick={() => toggleGroup(g.id)}
                 >
                   <svg className="ui-fm__chevron" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M6.5 9.5 12 15l5.5-5.5" />
                   </svg>
-                  <span className="ui-fm__group-label">{g.label}</span>
-                  <span className="ui-fm__group-count">{g.options.length}</span>
+                  <span className="ui-fm__group-label" dir="auto" title={g.label}>
+                  {g.label}
+                </span>
+                  <span className="ui-fm__group-count">{g.options.length.toLocaleString("en-US")}</span>
                   <span className="ui-fm__group-picked" aria-live="polite">
                     {count > 0 ? `${count} filter${count === 1 ? "" : "s"}` : ""}
                   </span>
                 </button>
                 {/* Opens and closes by animating its grid row from 0 to the content height */}
-                <div className="ui-fm__panel" id={`${g.id}-options`} role="group" aria-label={g.label}>
+                <div className="ui-fm__panel" id={`${uid}-${gi}`} role="group" aria-label={g.label}>
                   <div className="ui-fm__panel-inner">
-                    {g.options.map((o) => {
-                      const key = `o:${g.id}:${o.id}`;
+                    {g.options.map((o, oi) => {
+                      const key = `o:${gi}:${oi}`;
                       const on = isOn(g.id, o.id);
                       return (
                         <button
-                          key={o.id}
+                          key={`${o.id}#${oi}`}
                           type="button"
                           role="checkbox"
                           aria-checked={on}
@@ -196,7 +217,9 @@ export function FilterMenu({
                               <path d="m6 12.5 4 4 8-9" />
                             </svg>
                           </span>
-                          {o.label}
+                          <span className="ui-fm__option-label" dir="auto" title={o.label}>
+                            {o.label}
+                          </span>
                         </button>
                       );
                     })}
@@ -303,8 +326,9 @@ const css = /* css */ `
 /* ---------- Header ---------- */
 
 .ui-fm__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 2px; }
-.ui-fm__title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.ui-fm__title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .ui-fm__clear {
+  flex: none;
   padding: 4px 6px;
   margin-right: -6px !important;
   border: 0;
@@ -325,6 +349,8 @@ const css = /* css */ `
 .ui-fm__chips:empty { padding-top: 0; }
 .ui-fm__chip {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 2px;
   height: 30px;
@@ -336,8 +362,10 @@ const css = /* css */ `
   white-space: nowrap;
   animation: ui-fm-chip-in 260ms var(--ui-fm-ease) both;
 }
+.ui-fm__chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-fm__chip button {
   display: grid;
+  flex: none;
   place-items: center;
   width: 22px;
   height: 22px;
@@ -353,7 +381,7 @@ const css = /* css */ `
 
 /* ---------- Groups ---------- */
 
-.ui-fm__groups { display: grid; padding-top: 6px; }
+.ui-fm__groups { display: grid; grid-template-columns: minmax(0, 1fr); padding-top: 6px; }
 .ui-fm__group-head {
   display: flex;
   align-items: center;
@@ -382,9 +410,9 @@ const css = /* css */ `
   transition: transform 260ms var(--ui-fm-ease);
 }
 .ui-fm__group[data-open] .ui-fm__chevron { transform: none; }
-.ui-fm__group-label { font-size: 14px; font-weight: 500; }
-.ui-fm__group-count { font-size: 12.5px; color: var(--ui-fm-muted); font-variant-numeric: tabular-nums; }
-.ui-fm__group-picked { margin-left: auto; font-size: 12.5px; color: var(--ui-fm-muted); }
+.ui-fm__group-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; font-size: 14px; font-weight: 500; }
+.ui-fm__group-count { flex: none; font-size: 12.5px; color: var(--ui-fm-muted); font-variant-numeric: tabular-nums; }
+.ui-fm__group-picked { flex: none; margin-left: auto; white-space: nowrap; font-size: 12.5px; color: var(--ui-fm-muted); }
 
 .ui-fm__panel {
   display: grid;
@@ -396,12 +424,15 @@ const css = /* css */ `
   min-height: 0;
   overflow: hidden;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1px;
   padding: 0 0 0;
   opacity: 0;
   transition: opacity 220ms ease, padding 320ms var(--ui-fm-ease);
 }
 .ui-fm__group[data-open] .ui-fm__panel-inner { opacity: 1; padding: 2px 0 6px; }
+/* A long list scrolls inside the open group, so the card keeps a sane height */
+.ui-fm__group[data-open] .ui-fm__panel-inner { max-height: 340px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 
 .ui-fm__option {
   display: flex;
@@ -419,6 +450,7 @@ const css = /* css */ `
   text-align: left;
   transition: background-color 160ms ease;
 }
+.ui-fm__option-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; }
 .ui-fm__option:hover { background: var(--ui-fm-row-hover); }
 .ui-fm__option:focus-visible { outline-offset: -2px; }
 .ui-fm__box {

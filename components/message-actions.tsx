@@ -106,7 +106,7 @@ export function MessageText({ version, children, className }: { version: string 
       <style href="ui-message-actions" precedence="default">
         {css}
       </style>
-      <div ref={inner} className="ui-ma-text__inner">
+      <div ref={inner} className="ui-ma-text__inner" dir="auto">
         <Swap id={String(version)} className="ui-ma-text__swap">
           {children}
         </Swap>
@@ -134,11 +134,17 @@ const icons = {
 };
 
 const DEFAULT_ACTIONS: MessageActionKey[] = ["copy", "regenerate", "feedback", "speak"];
+/** Known actions only, each once – an unknown key or a repeat would render a stray or doubled button */
+const cleanActions = (list: unknown): MessageActionKey[] =>
+  Array.isArray(list) ? [...new Set(list)].filter((k): k is MessageActionKey => DEFAULT_ACTIONS.includes(k)) : DEFAULT_ACTIONS;
+/** A whole, finite number or the fallback */
+const whole = (n: unknown, fallback: number) => (typeof n === "number" && Number.isFinite(n) ? Math.floor(n) : fallback);
+const fmt = (n: number) => n.toLocaleString("en-US");
 const DEFAULT_REASONS = ["Not accurate", "Too long", "Didn't follow instructions", "Other"];
 
 export function MessageActions({
   text,
-  actions = DEFAULT_ACTIONS,
+  actions: actionsProp = DEFAULT_ACTIONS,
   versions,
   version,
   defaultVersion,
@@ -156,10 +162,11 @@ export function MessageActions({
   className,
 }: MessageActionsProps) {
   const uid = useId();
-  const count = Math.max(1, typeof versions === "number" ? Math.floor(versions) : (versions?.length ?? 1));
+  const actions = cleanActions(actionsProp);
+  const count = Math.max(1, whole(typeof versions === "number" ? versions : Array.isArray(versions) ? versions.length : 1, 1));
 
   /* ----- Versions ----- */
-  const [inner, setInner] = useState(() => Math.min(count - 1, Math.max(0, defaultVersion ?? count - 1)));
+  const [inner, setInner] = useState(() => Math.min(count - 1, Math.max(0, whole(defaultVersion, count - 1))));
   const [seenCount, setSeenCount] = useState(count);
   const [vote, setVote] = useState<FeedbackKind | null>(null);
   const [panel, setPanel] = useState(false);
@@ -175,13 +182,13 @@ export function MessageActions({
     }
     setSeenCount(count);
   }
-  const index = Math.min(count - 1, Math.max(0, version ?? inner));
+  const index = Math.min(count - 1, Math.max(0, whole(version, inner)));
   const goTo = (i: number) => {
     const next = Math.min(count - 1, Math.max(0, i));
     if (next === index) return;
     if (version === undefined) setInner(next);
     onVersionChange?.(next);
-    announce(`Version ${next + 1} of ${count}`);
+    announce(`Version ${fmt(next + 1)} of ${fmt(count)}`);
   };
 
   /* ----- Status line for screen readers ----- */
@@ -196,7 +203,11 @@ export function MessageActions({
     return () => window.clearTimeout(t);
   }, [copied]);
   const copy = () => {
-    if (text !== undefined) navigator.clipboard?.writeText(text).catch(() => {});
+    try {
+      if (text !== undefined) navigator.clipboard?.writeText(text).catch(() => {});
+    } catch {
+      // No clipboard here (insecure page, old browser) – the check still confirms the press
+    }
     onCopy?.(text);
     setCopied(Date.now());
     announce("Copied");
@@ -258,7 +269,7 @@ export function MessageActions({
   const [innerSpeaking, setInnerSpeaking] = useState(false);
   const playing = speaking ?? innerSpeaking;
   const words = text ? text.trim().split(/\s+/).length : 0;
-  const duration = speakDuration ?? Math.max(2600, words * 380);
+  const duration = typeof speakDuration === "number" && speakDuration > 0 ? speakDuration : Math.max(2600, words * 380);
   useEffect(() => {
     if (speaking !== undefined || !innerSpeaking) return;
     const t = window.setTimeout(() => {
@@ -362,12 +373,12 @@ export function MessageActions({
               >
                 <Glyph d={icons.prev} />
               </button>
-              <span className="ui-ma__count" aria-label={`Version ${index + 1} of ${count}`}>
+              <span className="ui-ma__count" aria-label={`Version ${fmt(index + 1)} of ${fmt(count)}`}>
                 <Swap id={String(index)} className="ui-ma__count-now">
-                  {index + 1}
+                  {fmt(index + 1)}
                 </Swap>
                 <span aria-hidden="true">/</span>
-                <Swap id={String(count)}>{count}</Swap>
+                <Swap id={String(count)}>{fmt(count)}</Swap>
               </span>
               <button
                 type="button"
@@ -471,14 +482,16 @@ export function MessageActions({
                 </button>
               </div>
               <div className="ui-ma__chips">
-                {reasons.map((r) => (
+                {(Array.isArray(reasons) ? reasons : []).map((r, i) => (
                   <button
-                    key={r}
+                    key={`${r}-${i}`}
                     type="button"
                     className="ui-ma__chip"
                     aria-pressed={reason === r}
                     disabled={sent}
                     onClick={() => setReason(reason === r ? null : r)}
+                    title={r}
+                    dir="auto"
                   >
                     {r}
                   </button>
@@ -503,13 +516,14 @@ export function MessageActions({
                   </Swap>
                 </button>
               </div>
-              {reasons.includes("Other") && (
+              {Array.isArray(reasons) && reasons.includes("Other") && (
                 <div className="ui-ma__fold" data-open={reason === "Other" && !sent ? "" : undefined} inert={reason !== "Other" || sent}>
                   <div className="ui-ma__clip">
                     <input
                       className="ui-ma__input"
                       value={other}
                       placeholder="Tell us more (optional)"
+                      dir="auto"
                       aria-label="What went wrong, in your words"
                       onChange={(e) => setOther(e.target.value)}
                       onKeyDown={(e) => {
@@ -567,7 +581,8 @@ const css = /* css */ `
 .ui-ma__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ----- The bar: quiet until the message is hovered, something inside is focused or busy ----- */
-.ui-ma__bar { display: flex; align-items: center; gap: 2px; min-height: 30px; transition: opacity 240ms ease; }
+/* Wraps to a second row in a very narrow message instead of running out of it */
+.ui-ma__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-height: 30px; transition: opacity 240ms ease; }
 .ui-ma[data-quiet] .ui-ma__bar { opacity: 0.6; }
 .ui-ma[data-quiet]:hover .ui-ma__bar,
 .ui-ma[data-quiet]:focus-within .ui-ma__bar,
@@ -648,7 +663,7 @@ const css = /* css */ `
 .ui-ma__close .ui-ma__glyph { width: 14px; height: 14px; }
 .ui-ma__close:hover { background: var(--ui-ma-hover); color: var(--ui-ma-ink); }
 .ui-ma__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
-.ui-ma__chip { height: 26px; padding: 0 9px; border-radius: 8px; background: var(--ui-ma-well); font-size: 12px; color: var(--ui-ma-text); white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 200ms ease; }
+.ui-ma__chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; height: 26px; padding: 0 9px; border-radius: 8px; background: var(--ui-ma-well); font-size: 12px; color: var(--ui-ma-text); white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 200ms ease; }
 .ui-ma__chip:hover:not(:disabled) { background: var(--ui-ma-line); color: var(--ui-ma-ink); }
 .ui-ma__chip[aria-pressed="true"], .ui-ma__chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--ui-ma-accent-bg); color: var(--ui-ma-accent); }
 .ui-ma__chip:disabled { cursor: default; }
@@ -663,6 +678,7 @@ const css = /* css */ `
 /* ----- Message text that crossfades between versions (MessageText) ----- */
 .ui-ma-text { overflow: hidden; transition: height 360ms var(--ui-ma-ease, cubic-bezier(0.32, 0.72, 0.24, 1)); }
 .ui-ma-text__swap { display: grid; }
+.ui-ma-text__inner { min-width: 0; overflow-wrap: anywhere; }
 .ui-ma-text__swap > .ui-ma__swap-item { display: block; animation: ui-ma-text-in 420ms ease both; }
 .ui-ma-text__swap > .ui-ma__swap-item[data-out] { animation: ui-ma-out 260ms ease both; }
 

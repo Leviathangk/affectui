@@ -29,14 +29,19 @@ const labels: Record<ReactionKey, [string, string]> = {
   share: ["Share", "shares"],
 };
 
-/** 1234 → "1.2K", like social apps */
-const short = (n: number) =>
-  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `${Math.round(n / 1000)}K` : n >= 1000 ? `${+(n / 1000).toFixed(1)}K` : `${n}`;
+/** 1234 → "1.2K", like social apps – rounded so 999,950 reads "1M", not "1000K" */
+const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const exact = new Intl.NumberFormat("en");
+const short = (n: number) => (n >= 10_000 && n < 1_000_000 ? compact.format(Math.round(n / 1000) * 1000) : compact.format(n));
+/** Counts are whole, never negative – NaN, Infinity and the like count as 0 */
+const clean = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
 
-export function ReactionBar({ reactions = {}, onReact, actions = ["like", "comment", "repost", "share"], className }: ReactionBarProps) {
+export function ReactionBar({ reactions = {}, onReact, actions: actionsProp = ["like", "comment", "repost", "share"], className }: ReactionBarProps) {
+  // Only known actions, each once
+  const actions = (Array.isArray(actionsProp) ? actionsProp : []).filter((k, i, all) => k in labels && all.indexOf(k) === i);
   const [state, setState] = useState(() =>
     Object.fromEntries(
-      actions.map((k) => [k, { count: reactions[k]?.count ?? 0, active: reactions[k]?.active ?? false }]),
+      (Object.keys(labels) as ReactionKey[]).map((k) => [k, { count: clean(reactions?.[k]?.count), active: reactions?.[k]?.active === true }]),
     ) as Record<ReactionKey, Required<ReactionState>>,
   );
   const [popped, setPopped] = useState<Record<string, number>>({});
@@ -49,6 +54,8 @@ export function ReactionBar({ reactions = {}, onReact, actions = ["like", "comme
     setPopped((p) => ({ ...p, [key]: (p[key] ?? 0) + 1 }));
     onReact?.(key, next);
   };
+
+  if (!actions.length) return null;
 
   return (
     <>
@@ -66,7 +73,8 @@ export function ReactionBar({ reactions = {}, onReact, actions = ["like", "comme
               className="ui-rbc__btn"
               data-kind={key}
               aria-pressed={active}
-              aria-label={`${verb}${count ? `, ${count} ${count === 1 ? noun.slice(0, -1) : noun}` : ""}`}
+              aria-label={`${verb}${count ? `, ${exact.format(count)} ${count === 1 ? noun.slice(0, -1) : noun}` : ""}`}
+              title={count >= 1000 ? `${exact.format(count)} ${noun}` : undefined}
               onClick={() => toggle(key)}
             >
               <span className="ui-rbc__icon" key={popped[key] ?? 0} data-pop={popped[key] ? true : undefined}>
@@ -164,6 +172,7 @@ const css = /* css */ `
   --ui-rbc-h: 28px;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   max-width: 100%;
   font-family: "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
