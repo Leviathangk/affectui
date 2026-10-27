@@ -105,9 +105,17 @@ export function ThinkingLoader({
     // Layout pixels (offset/scroll/client), so it stays right inside a CSS zoom or transform (+1 covers rounding)
     const full = c.scrollWidth + 1;
     const parent = r.parentElement;
+    // Measured with the box at the label's full width – a parent that wraps around the pill grows with it, so only a
+    // container that's really too narrow cuts the label. Without a transition, so the pill still glides from where it was.
+    const was = { width: b.style.width, transition: b.style.transition };
+    b.style.transition = "none";
+    b.style.width = `${full}px`;
     const pad = parent ? getComputedStyle(parent) : null;
     const inner = parent && pad ? parent.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight) : 0;
     const room = parent ? Math.floor(inner - (r.offsetWidth - b.offsetWidth)) : full;
+    b.style.width = was.width;
+    b.getBoundingClientRect();
+    b.style.transition = was.transition;
     const cut = room > 0 && full > room;
     r.toggleAttribute("data-cut", cut);
     b.style.width = `${cut ? room : full}px`;
