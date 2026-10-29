@@ -65,6 +65,32 @@ type RowState = {
   seek: number;
 };
 
+/** First letter of a name as a whole grapheme, so "🦊 Fox" gives 🦊 and "Ølafur" gives Ø */
+function initial(name: string) {
+  const text = name.trim();
+  if (!text) return "?";
+  const first =
+    typeof Intl !== "undefined" && "Segmenter" in Intl
+      ? new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)[Symbol.iterator]().next().value?.segment
+      : Array.from(text)[0];
+  return (first ?? "?").toLocaleUpperCase();
+}
+
+/**
+ * The mark: the svg, else the image, else – when there is no visible name next to it – a letter tile, so a logo
+ * without artwork (or with an image that fails to load) never leaves an empty gap in the strip.
+ */
+function Mark({ logo, named }: { logo: MarqueeLogo; named: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const mark = logo.svg ?? (logo.src && !failed ? <img src={logo.src} alt="" draggable={false} onError={() => setFailed(true)} /> : null);
+  if (!mark && named) return null;
+  return (
+    <span className="ui-lm__mark" aria-hidden="true">
+      {mark ?? <span className="ui-lm__tile">{initial(logo.name)}</span>}
+    </span>
+  );
+}
+
 const mod = (n: number, m: number) => (m > 0 ? ((n % m) + m) % m : 0);
 const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 
@@ -249,19 +275,23 @@ export function LogoMarquee({
     else if (r.right > v.right - pad) s.seek = r.right - (v.right - pad);
   };
 
-  const item = (logo: MarqueeLogo, i: number, interactive: boolean) => {
-    const mark = logo.svg ?? (logo.src ? <img src={logo.src} alt="" draggable={false} /> : null);
+  const item = (logo: MarqueeLogo, i: number, interactive: boolean, index: number) => {
     const body = (
       <>
-        <span className="ui-lm__mark" aria-hidden="true">
-          {mark}
-        </span>
-        {labels !== "none" ? <span className="ui-lm__name">{logo.name}</span> : <span className="ui-lm__sr">{logo.name}</span>}
+        <Mark logo={logo} named={labels !== "none"} />
+        {labels !== "none" ? (
+          <span className="ui-lm__name" title={logo.name}>
+            {logo.name}
+          </span>
+        ) : (
+          <span className="ui-lm__sr">{logo.name}</span>
+        )}
       </>
     );
     return (
       <li
-        key={logo.name}
+        // Index in the key too – two logos may share a name
+        key={`${index}-${logo.name}`}
         className="ui-lm__item"
         style={{ "--ui-lm-brand": logo.color, "--ui-lm-scale": logo.scale } as CSSProperties}
       >
@@ -281,6 +311,9 @@ export function LogoMarquee({
       </li>
     );
   };
+
+  // Nothing to show – no empty, labelled region
+  if (logos.length === 0) return null;
 
   const vars = { "--ui-lm-gap": `${gap}px` } as CSSProperties;
   const cls = ["ui-lm", className].filter(Boolean).join(" ");
@@ -311,7 +344,7 @@ export function LogoMarquee({
       >
         {reduced ? (
           // Reduced motion: one calm, wrapping row – nothing moves
-          <ul className="ui-lm__wrap">{logos.map((l) => item(l, 0, true))}</ul>
+          <ul className="ui-lm__wrap">{logos.map((l, k) => item(l, 0, true, k))}</ul>
         ) : (
           split.map((row, i) => (
             <div
@@ -346,7 +379,7 @@ export function LogoMarquee({
                     aria-hidden={c > 0 || undefined}
                     inert={c > 0 || undefined}
                   >
-                    {row.logos.map((l) => item(l, i, c === 0))}
+                    {row.logos.map((l, k) => item(l, i, c === 0, k))}
                   </ul>
                 ))}
               </div>
@@ -444,11 +477,26 @@ const css = /* css */ `
   pointer-events: none;
 }
 .ui-lm__name {
+  /* A long company name ends in an ellipsis; the full name is in the title */
+  max-width: calc(var(--ui-lm-h) * 9);
+  overflow: hidden;
   font-size: calc(var(--ui-lm-h) * 0.68);
   font-weight: 600;
   letter-spacing: -0.025em;
-  line-height: 1;
+  line-height: 1.15;
   white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ui-lm__tile {
+  display: grid;
+  place-items: center;
+  width: var(--ui-lm-h);
+  height: var(--ui-lm-h);
+  border-radius: calc(var(--ui-lm-h) * 0.26);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: calc(var(--ui-lm-h) * 0.5);
+  font-weight: 600;
+  line-height: 1;
 }
 .ui-lm[data-labels="below"] .ui-lm__name {
   font-size: 12px;

@@ -64,13 +64,50 @@ const START = [0, 0.42, 0.18];
 const mod = (n: number, m: number) => (m > 0 ? ((n % m) + m) % m : 0);
 const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
+/** First character of a word as a whole grapheme, so an emoji like 👩🏽‍💻 or an accent never splits */
+const firstChar = (word: string) =>
+  (typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter().segment(word)[Symbol.iterator]().next().value?.segment
+    : Array.from(word)[0]) ?? "";
+
+const initials = (name: string) => {
+  const words = name.split(/\s+/).filter(Boolean);
+  // Words that start with a letter win, so "🦊 Fox" reads "F"
+  const named = words.filter((w) => /^\p{L}/u.test(w));
+  return (named.length ? named : words)
     .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
-    .join("");
+    .map((p) => firstChar(p).toUpperCase())
+    .join("") || "?";
+};
+
+/** Shows the full text as a tooltip, but only when it is cut off */
+const showFull = (e: React.PointerEvent<HTMLElement>) => {
+  const el = e.currentTarget;
+  const cut = el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+  el.title = cut ? (el.textContent ?? "") : "";
+};
+
+/** Photo, or the initials when there is none or it fails to load */
+function Avatar({ src, name }: { src?: string; name: string }) {
+  const [broken, setBroken] = useState<string | null>(null);
+  return src && broken !== src ? (
+    <img
+      className="ui-tw__avatar"
+      src={src}
+      alt=""
+      width={36}
+      height={36}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      onError={() => setBroken(src)}
+    />
+  ) : (
+    <span className="ui-tw__avatar ui-tw__avatar--initials" aria-hidden="true">
+      {initials(name)}
+    </span>
+  );
+}
 
 /** Container width → column count; matches the container queries in the styles */
 const fit = (width: number, max: number) => Math.min(max, width >= 740 ? 3 : width >= 480 ? 2 : 1);
@@ -91,7 +128,9 @@ export function TestimonialWall({
   const hover = useRef<boolean[]>([]);
   const hold = useRef<boolean[]>([]);
   const focus = useRef<boolean[]>([]);
-  const [count, setCount] = useState<number>(columns);
+  const [fitCount, setCount] = useState<number>(columns);
+  // Never more columns than quotes, so one or two quotes don't leave empty lanes
+  const count = Math.max(1, Math.min(fitCount, items.length));
   const [copies, setCopies] = useState<number[]>([]);
   const [reduced, setReduced] = useState(false);
 
@@ -287,7 +326,7 @@ export function TestimonialWall({
 
   const card = (t: Testimonial, i: number, interactive: boolean, key: string) => {
     // The dot stays with the role, so a wrap starts cleanly with the company
-    const meta = [t.role, t.company].filter(Boolean).join("\u00a0· ");
+    const meta = [t.role?.trim(), t.company?.trim()].filter(Boolean).join("\u00a0· ");
     const stars = t.rating ? clamp(Math.round(t.rating), 1, 5) : 0;
     return (
       <li key={key} className="ui-tw__item">
@@ -296,7 +335,7 @@ export function TestimonialWall({
           tabIndex={interactive ? 0 : undefined}
           onFocus={interactive ? onFocusCard(i) : undefined}
         >
-          {stars ? (
+          {stars && Number.isFinite(stars) ? (
             <div className="ui-tw__stars" role="img" aria-label={`Rated ${stars} out of 5`}>
               {Array.from({ length: 5 }, (_, n) => (
                 <svg key={n} viewBox="0 0 16 16" aria-hidden="true" data-on={n < stars || undefined}>
@@ -305,20 +344,16 @@ export function TestimonialWall({
               ))}
             </div>
           ) : null}
-          <blockquote className="ui-tw__quote">
-            <p>{t.quote}</p>
-          </blockquote>
+          {t.quote.trim() && (
+            <blockquote className="ui-tw__quote">
+              <p onPointerEnter={showFull}>{t.quote.trim()}</p>
+            </blockquote>
+          )}
           <figcaption className="ui-tw__who">
-            {t.avatar ? (
-              <img className="ui-tw__avatar" src={t.avatar} alt="" width={36} height={36} loading="lazy" decoding="async" draggable={false} />
-            ) : (
-              <span className="ui-tw__avatar ui-tw__avatar--initials" aria-hidden="true">
-                {initials(t.name)}
-              </span>
-            )}
+            <Avatar src={t.avatar} name={t.name} />
             <span className="ui-tw__id">
               <span className="ui-tw__name">
-                <span className="ui-tw__name-text">{t.name}</span>
+                <span className="ui-tw__name-text" onPointerEnter={showFull}>{t.name.trim()}</span>
                 {t.verified ? (
                   <svg className="ui-tw__verified" viewBox="0 0 16 16" role="img" aria-label="Verified customer">
                     <circle cx="8" cy="8" r="7" />
@@ -326,7 +361,7 @@ export function TestimonialWall({
                   </svg>
                 ) : null}
               </span>
-              {meta ? <span className="ui-tw__meta">{meta}</span> : null}
+              {meta ? <span className="ui-tw__meta" onPointerEnter={showFull}>{meta}</span> : null}
             </span>
           </figcaption>
         </figure>
@@ -349,8 +384,10 @@ export function TestimonialWall({
         data-cols={count}
         data-static={reduced || undefined}
         style={{ "--ui-tw-cols": count } as CSSProperties}
+        data-empty={items.length === 0 || undefined}
       >
-        {dealt.map((list, i) =>
+        {items.length === 0 && <p className="ui-tw__empty">No quotes yet</p>}
+        {items.length > 0 && dealt.map((list, i) =>
           reduced ? (
             // Reduced motion: a calm, static masonry – every quote once, nothing moves
             <div key={i} className="ui-tw__col">
@@ -454,6 +491,9 @@ const css = /* css */ `
   -webkit-font-smoothing: antialiased;
 }
 
+.ui-tw[data-empty] { display: grid; place-items: center; height: auto; min-height: 160px; -webkit-mask-image: none; mask-image: none; }
+.ui-tw__empty { margin: 0; font-size: 14px; color: var(--ui-tw-muted); }
+
 .ui-tw__col {
   position: relative;
   min-width: 0;
@@ -504,6 +544,13 @@ const css = /* css */ `
   letter-spacing: -0.006em;
   text-wrap: pretty;
   overflow-wrap: break-word;
+  /* Line breaks in a quote are kept; very long quotes stop at ten lines so a card never outgrows the wall */
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+  line-clamp: 10;
+  overflow: hidden;
 }
 
 .ui-tw__who { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -540,9 +587,15 @@ const css = /* css */ `
 /* The name wins over the role: it shrinks last and only then truncates */
 .ui-tw__name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-tw__verified { flex: none; width: 14px; height: 14px; fill: var(--ui-tw-faint); }
+/* Role and company wrap once at most, then end in an ellipsis */
 .ui-tw__meta {
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   font-size: 12.5px;
   line-height: 17px;
   color: var(--ui-tw-muted);
