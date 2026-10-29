@@ -30,6 +30,13 @@
 
 **UI for AI agents.** affectUI is a library of React components for what agents do – runs, tool calls, traces, handoffs, approvals and context – and for the rest of your app: inputs, menus, charts, screens, illustrations and motion. Every item is **one `.tsx` file with its styles inside**: no Tailwind, no CSS setup, no animation library. Install it with the shadcn CLI, or let Claude Code, Cursor or Codex add it through the MCP server, and it is source you own.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/trust-dark.png">
+    <img alt="Used by developers at Teamworks, RedNote, Cloudforce, Moonshot AI, Terminal49, Meitu and Beacons" src="./.github/assets/trust-light.png" width="100%">
+  </picture>
+</p>
+
 ## Showcase
 
 Agent components, recorded live from [affectui.com](https://www.affectui.com). Items marked <sup>Pro</sup> are part of [affectUI Pro](https://www.affectui.com/pricing) and are not in this repository; everything else installs from here for free.
